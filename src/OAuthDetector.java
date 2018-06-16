@@ -10,8 +10,18 @@ import java.util.Iterator;
 import java.util.Map;
 
 public class OAuthDetector {
+
+    private static String apkPath = "";
+
     public static void main(String[] args){
-        String apkPath = args[0];
+
+        // Initialize variables
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("-process-dir")) {
+                apkPath = args[i + 1];
+                break;
+            }
+        }
 
         // initialize soot
         Settings.initializeSoot(apkPath);
@@ -19,18 +29,20 @@ public class OAuthDetector {
         // Get the class hierarchy of current application
         Hierarchy classHierarchy = Scene.v().getActiveHierarchy();
 
-                // run Soot to find the oauth providers
-        PackManager.v().getPack("wjtp").add(new Transform("jtp.OAuthDetector", new BodyTransformer() {
+        // run Soot to find the oauth providers
+        PackManager.v().getPack("jtp").add(new Transform("jtp.OAuthDetector", new BodyTransformer() {
             @Override
             protected void internalTransform(Body b, String s, Map<String, String> map) {
                 final PatchingChain<Unit> units = b.getUnits();
                 SootClass c = b.getMethod().getDeclaringClass();
+                System.out.println("working on class:" + c.getName());
                 for(Iterator<Unit> iter = units.snapshotIterator(); iter.hasNext();) {
                     final Unit u = iter.next();
                     u.apply(new AbstractStmtSwitch() {
 
                         public void caseInvokeStmt(InvokeStmt stmt) {
                             InvokeExpr invokeExpr = stmt.getInvokeExpr();
+                            System.out.println("working on:" + invokeExpr.toString());
                             String[] detectionResults = utils.SootExprHandler.handleOAuthInvokeExpr(b, u, c, invokeExpr, classHierarchy);
 
                             // print to a file for debug
@@ -53,5 +65,7 @@ public class OAuthDetector {
                 }
             }
         }));
+
+        soot.Main.main(args);
     }
 }

@@ -1,5 +1,6 @@
 package utils;
 
+import config.Constants;
 import soot.*;
 import soot.jimple.InvokeExpr;
 
@@ -8,7 +9,7 @@ public class SootExprHandler {
         String className = c.getName();
         String methodName = invokeExpr.getMethod().getName();
         String methodClass = invokeExpr.getMethod().getDeclaringClass().getName();
-        String[] results = new String[2];
+        String[] results = {"None", "None"};
 
         // Google
         if (OAuthProviders.detectGoogle(className, methodName, methodClass)) {
@@ -17,6 +18,11 @@ public class SootExprHandler {
             if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
+
+            // print to a file for debug
+            String printResults = results[0] + "\t" + results[1];
+            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
+
             // TODO: what if the method is not in an activity but in a class called by an activity
 //            else {
 //                if(classHierarchy.isClassSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))){
@@ -32,6 +38,10 @@ public class SootExprHandler {
             if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
+
+            // print to a file for debug
+            String printResults = results[0] + "\t" + results[1];
+            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
         }
 
         // GoogleV1
@@ -41,6 +51,10 @@ public class SootExprHandler {
             if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
+
+            // print to a file for debug
+            String printResults = results[0] + "\t" + results[1];
+            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
         }
 
 //        // Facebook

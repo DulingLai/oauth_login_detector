@@ -5,7 +5,9 @@ import soot.Scene;
 import soot.SootClass;
 import soot.options.Options;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 public class Settings {
 
@@ -27,7 +29,11 @@ public class Settings {
 
         Options.v().set_android_jars(Constants.ANDROID_JAR);       //Set android jar location
         Options.v().set_force_android_jar(Constants.ANDROID_JAR + "android-21/android.jar");
-        Options.v().set_process_dir(Collections.singletonList(apkPath));        // set target APK
+
+        // set target APK
+        List<String> procDir = new ArrayList<>();
+        procDir.add(apkPath);
+        Options.v().set_process_dir(procDir);
 
 //        Options.v().set_validate(true);
         // Set basic class

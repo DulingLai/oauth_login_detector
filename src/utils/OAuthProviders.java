@@ -1,7 +1,7 @@
 package utils;
 
+import config.GlobalConfigs;
 import soot.Body;
-import soot.SootClass;
 import soot.Unit;
 import soot.jimple.InvokeExpr;
 
@@ -10,9 +10,7 @@ public class OAuthProviders {
         if (methodName.equals("getClient")) {
             if (methodClassName.contains("com.google.android.gms.auth.api.signin.GoogleSignIn")) {
                 if (!className.contains("com.google")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Google in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Google in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -33,9 +31,7 @@ public class OAuthProviders {
                         curUnit = b.getUnits().getPredOf(curUnit);
                         if (curUnit.getDefBoxes().size() != 0 && curUnit.getDefBoxes().get(0).getValue().toString().equals(arg)) {
                             if (curUnit.getUseBoxes().size() != 0 && curUnit.getUseBoxes().get(0).getValue().toString().contains("<com.google.android.gms.auth.api.Auth: com.google.android.gms.common.api.Api GOOGLE_SIGN_IN_API>")) {
-                                if (config.Constants.debug) {
-                                    System.out.println("Google (Migrate) in " + className + ": " + methodClassName + "." + methodName);
-                                }
+                                System.out.println("Google (Migrate) in " + className + ": " + methodClassName + "." + methodName);
                                 return true;
                             } else {
                                 return false;
@@ -61,9 +57,7 @@ public class OAuthProviders {
                         curUnit = b.getUnits().getPredOf(curUnit);
                         if (curUnit.getDefBoxes().size() != 0 && curUnit.getDefBoxes().get(0).getValue().toString().equals(arg)) {
                             if (curUnit.getUseBoxes().size() != 0 && curUnit.getUseBoxes().get(0).getValue().toString().contains("<com.google.android.gms.plus.Plus: com.google.android.gms.common.api.Api API>")) {
-                                if (config.Constants.debug) {
-                                    System.out.println("Google (V1) in " + className + ": " + methodClassName + "." + methodName);
-                                }
+                                System.out.println("Google (V1) in " + className + ": " + methodClassName + "." + methodName);
                                 return true;
                             } else {
                                 return false;
@@ -80,9 +74,7 @@ public class OAuthProviders {
         if (methodName.equals("registerCallback")) {
             if (methodClassName.contains("com.facebook.login.LoginManager") || methodClassName.contains("com.facebook.login.LoginButton")) {
                 if (!className.contains("com.facebook")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Facebook in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Facebook in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -94,9 +86,7 @@ public class OAuthProviders {
         if (methodName.equals("addCallback")) {
             if (methodClassName.contains("com.facebook.Session")) {
                 if (!className.contains("com.facebook")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Facebook (V3) in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Facebook (V3) in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -108,9 +98,7 @@ public class OAuthProviders {
         if (methodName.equals("setCallback")) {
             if (methodClassName.contains("com.twitter.sdk.android.core.identity.TwitterLoginButton")) {
                 if (!className.contains("com.twitter")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Twitter (Authentication) in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Twitter (Authentication) in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -122,9 +110,7 @@ public class OAuthProviders {
         if (methodName.equals("authorize")) {
             if (methodClassName.contains("com.twitter.sdk.android.core.identity.TwitterAuthClient")) {
                 if (!className.contains("com.twitter")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Twitter (Authorization) in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Twitter (Authorization) in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -136,9 +122,7 @@ public class OAuthProviders {
         if (methodName.equals("getOAuthRequestToken")) {
             if (methodClassName.contains("twitter4j.auth.OAuthSupport")) {
                 if (!className.contains("twitter4j")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Twitter4J in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Twitter4J in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -150,9 +134,7 @@ public class OAuthProviders {
         if (methodName.equals("initialize")) {
             if (methodClassName.contains("com.vk.sdk.VKSdk")) {
                 if (!className.contains("com.vk")) {
-                    if (config.Constants.debug) {
-                        System.out.println("VK in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("VK in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -164,9 +146,7 @@ public class OAuthProviders {
         if (methodName.equals("init")) {
             if (methodClassName.contains("com.linkedin.platform.LISessionManager")) {
                 if (!className.contains("com.linkedin")) {
-                    if (config.Constants.debug) {
-                        System.out.println("LinkedIn in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("LinkedIn in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -179,9 +159,7 @@ public class OAuthProviders {
         if (methodName.equals("registerListener")) {
             if (methodClassName.contains("com.amazon.identity.auth.device.api.workflow.RequestContext")) {
                 if (!className.contains("com.amazon")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Amazon in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Amazon in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }
@@ -193,9 +171,7 @@ public class OAuthProviders {
         if (methodName.equals("getConnectIntent")) {
             if (methodClassName.contains("com.foursquare.android.nativeoauth.FoursquareOAuth")) {
                 if (!className.contains("com.foursquare")) {
-                    if (config.Constants.debug) {
-                        System.out.println("Foursquare in " + className + ": " + methodClassName + "." + methodName);
-                    }
+                    System.out.println("Foursquare in " + className + ": " + methodClassName + "." + methodName);
                     return true;
                 }
             }

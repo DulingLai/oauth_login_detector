@@ -1,11 +1,14 @@
 package utils;
 
-import config.Constants;
+import config.GlobalConfigs;
 import soot.*;
 import soot.jimple.InvokeExpr;
 
+import java.util.List;
+import java.util.Optional;
+
 public class SootExprHandler {
-    public static String[] handleOAuthInvokeExpr(Body b, Unit u, SootClass c, InvokeExpr invokeExpr, Hierarchy classHierarchy) {
+    public static String[] handleOAuthInvokeExpr(Body b, Unit u, SootClass c, InvokeExpr invokeExpr, FastHierarchy classHierarchy) {
         String className = c.getName();
         String methodName = invokeExpr.getMethod().getName();
         String methodClass = invokeExpr.getMethod().getDeclaringClass().getName();
@@ -14,14 +17,14 @@ public class SootExprHandler {
         // Google
         if (OAuthProviders.detectGoogle(className, methodName, methodClass)) {
             results[0] = "Google";
-            // Check if the current class is an activity
-            if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
+//             Check if the current class is an activity
+            if (classHierarchy.isSubclass(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
+            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
 
             // TODO: what if the method is not in an activity but in a class called by an activity
 //            else {
@@ -35,26 +38,26 @@ public class SootExprHandler {
         if (OAuthProviders.detectGoogleMigrate(b, u, className, invokeExpr)) {
             results[0] = "GoogleMitigate";
             // Check if the current class is an activity
-            if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
+            if (classHierarchy.isSubclass(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
+            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
         }
 
         // GoogleV1
         if (OAuthProviders.detectGoogleV1(b, u, className, invokeExpr)) {
             results[0] = "GoogleV1";
             // Check if the current class is an activity
-            if (classHierarchy.isClassDirectSubclassOf(c, Scene.v().getSootClass("android.app.Activity"))) {
+            if (classHierarchy.isSubclass(c, Scene.v().getSootClass("android.app.Activity"))) {
                 results[1] = className;
             }
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(Constants.RESULT_FILE, printResults);
+            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
         }
 
 //        // Facebook
@@ -129,5 +132,47 @@ public class SootExprHandler {
 //            detected = true;
 //        }
         return results;
+    }
+
+    public static Optional<String[]> findResourceId(Body b, Unit u, SootClass c, InvokeExpr invokeExpr) {
+        String className = c.getName();
+        String methodName = invokeExpr.getMethod().getName();
+        String methodClass = invokeExpr.getMethod().getDeclaringClass().getName();
+        List<Value> argValue = invokeExpr.getArgs();
+
+        // Detect all the widgets resource-ids
+        if (methodName.equals("findViewById")) {
+            if(argValue != null) {
+                String arg = argValue.get(0).toString();
+//                    if (config.Constants.debug) {
+//                        System.out.println(className + ": " + methodClass + "." + methodName + "(" + arg + ")");
+//                    }
+                String[] results = {className, methodClass, methodName, arg};
+                return Optional.of(results);
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    public static Optional<String[]> findTextLabels(Body b, Unit u, SootClass c, InvokeExpr invokeExpr) {
+        String className = c.getName();
+        String methodName = invokeExpr.getMethod().getName();
+        String methodClass = invokeExpr.getMethod().getDeclaringClass().getName();
+        List<Value> argValue = invokeExpr.getArgs();
+
+        // Detect all the widgets resource-ids
+        if (methodName.equals("setContentDescription")) {
+            if(argValue != null) {
+                String arg = argValue.toString();
+//                    if (config.Constants.debug) {
+//                        System.out.println(className + ": " + methodClass + "." + methodName + "(" + arg + ")");
+//                    }
+                String[] results = {className, methodClass, methodName, arg};
+                return Optional.of(results);
+            }
+        }
+
+        return Optional.empty();
     }
 }

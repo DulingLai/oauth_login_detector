@@ -6,10 +6,9 @@ import soot.SootClass;
 import soot.options.Options;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
-public class Settings {
+public class SootSettings {
 
     // TODO: insert config params that can be set on runtime
 
@@ -27,8 +26,8 @@ public class Settings {
         Options.v().set_output_format(Options.output_format_none);
         Options.v().set_process_multiple_dex(true);
 
-        Options.v().set_android_jars(Constants.ANDROID_JAR);       //Set android jar location
-        Options.v().set_force_android_jar(Constants.ANDROID_JAR + "android-21/android.jar");
+        Options.v().set_android_jars(GlobalConfigs.ANDROID_JAR);       //Set android jar location
+        Options.v().set_force_android_jar(GlobalConfigs.ANDROID_JAR + "android-25/android.jar");
 
         // set target APK
         List<String> procDir = new ArrayList<>();

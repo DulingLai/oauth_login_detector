@@ -1,5 +1,4 @@
-import config.Constants;
-import config.Settings;
+import config.SootSettings;
 import soot.*;
 import soot.jimple.AbstractStmtSwitch;
 import soot.jimple.AssignStmt;
@@ -24,10 +23,10 @@ public class OAuthDetector {
         }
 
         // initialize soot
-        Settings.initializeSoot(apkPath);
+        SootSettings.initializeSoot(apkPath);
 
         // Get the class hierarchy of current application
-        Hierarchy classHierarchy = Scene.v().getActiveHierarchy();
+        FastHierarchy classHierarchy = Scene.v().getOrMakeFastHierarchy();
 
         // run Soot to find the oauth providers
         PackManager.v().getPack("jtp").add(new Transform("jtp.OAuthDetector", new BodyTransformer() {

@@ -1,6 +1,5 @@
-package utils;
+package dulinglai.android.alode.utils.sootUtils;
 
-import config.GlobalConfigs;
 import soot.Body;
 import soot.Unit;
 import soot.jimple.InvokeExpr;

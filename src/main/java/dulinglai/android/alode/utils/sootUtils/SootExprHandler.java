@@ -1,6 +1,7 @@
-package utils;
+package dulinglai.android.alode.utils.sootUtils;
 
-import config.GlobalConfigs;
+import dulinglai.android.alode.config.GlobalConfigs;
+import dulinglai.android.alode.utils.FileUtils;
 import soot.*;
 import soot.jimple.InvokeExpr;
 
@@ -24,7 +25,7 @@ public class SootExprHandler {
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
+            FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
 
             // TODO: what if the method is not in an activity but in a class called by an activity
 //            else {
@@ -44,7 +45,7 @@ public class SootExprHandler {
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
+            FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
         }
 
         // GoogleV1
@@ -57,7 +58,7 @@ public class SootExprHandler {
 
             // print to a file for debug
             String printResults = results[0] + "\t" + results[1];
-            utils.FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
+            FileUtils.printFile(GlobalConfigs.RESULT_FILE, printResults);
         }
 
 //        // Facebook

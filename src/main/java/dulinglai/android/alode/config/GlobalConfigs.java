@@ -1,9 +1,22 @@
-package config;
+package dulinglai.android.alode.config;
+
+import org.pmw.tinylog.Logger;
 
 /**
  * The Singleton class used to store configuration variables
  */
 public class GlobalConfigs {
+
+    /**
+     * Enumeration containing the callgraph algorithms supported for the use
+     * with the data flow tracker
+     */
+    public enum CallgraphAlgorithm {
+        AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM
+    }
+
+    // analysis related configs
+    private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
 
     // root directory of the project
     private String project_path;
@@ -14,10 +27,7 @@ public class GlobalConfigs {
     private String android_sdk_path;
     private String android_jar_path;
     private int android_api_level = 23;
-
-    // boolean config flags
-    private boolean debugConfig = true;
-    private boolean verboseConfig = true;
+    private boolean force_android_jar = false;
 
 
     // Getters and setters for configuration variables
@@ -118,35 +128,51 @@ public class GlobalConfigs {
     }
 
     /**
-     * Gets the current debug setting
-     * @return The current debug setting
+     * Gets force android jar setting
+     * @return The current force android jar setting
      */
-    public boolean getDebugConfig(){
-        return debugConfig;
+    public boolean getForceAndroidJar() {
+        return force_android_jar;
     }
     /**
-     * Sets the debug setting
-     * @param debugConfig
-     *          The target debug setting (boolean)
+     * Sets force android jar setting
+     * @param force_android_jar
+     *          The target setting for forcing android jar
      */
-    public void setDebugConfig(boolean debugConfig){
-        this.debugConfig = debugConfig;
+    public void setForceAndroidJar(boolean force_android_jar) {
+        this.force_android_jar = force_android_jar;
     }
 
     /**
-     * Gets the current verbose setting
-     * @return The current verbose setting
+     * Gets the callgraph algorithm to be used by the data flow tracker
+     * @return The callgraph algorithm to be used by the data flow tracker
      */
-    public boolean getVerboseConfig(){
-        return verboseConfig;
-    }
+    public CallgraphAlgorithm getCallgraphAlgorithm(){ return callgraphAlgorithm; }
     /**
-     * Sets the debug setting
-     * @param verboseConfig
-     *          The target verbose setting (boolean)
+     * Sets the callgraph algorithm to be used by the data flow tracker
+     * @param algorithm
+     *          The callgraph algorithm to be used by the data flow tracker
      */
-    public void setVerboseConfig(boolean verboseConfig){
-        this.verboseConfig = verboseConfig;
+    public void setCallgraphAlgorithm(String algorithm){ this.callgraphAlgorithm = parseCallgraphAlgorithm(algorithm); }
+
+    // enum parsers
+    private static CallgraphAlgorithm parseCallgraphAlgorithm(String algo) {
+        if (algo.equalsIgnoreCase("AUTO"))
+            return CallgraphAlgorithm.AutomaticSelection;
+        else if (algo.equalsIgnoreCase("CHA"))
+            return CallgraphAlgorithm.CHA;
+        else if (algo.equalsIgnoreCase("VTA"))
+            return CallgraphAlgorithm.VTA;
+        else if (algo.equalsIgnoreCase("RTA"))
+            return CallgraphAlgorithm.RTA;
+        else if (algo.equalsIgnoreCase("SPARK"))
+            return CallgraphAlgorithm.SPARK;
+        else if (algo.equalsIgnoreCase("GEOM"))
+            return CallgraphAlgorithm.GEOM;
+        else {
+            Logger.error(String.format("Invalid callgraph algorithm: %s", algo));
+            throw new RuntimeException();
+        }
     }
 
     // TODO remove this section if not in use

@@ -1,9 +1,9 @@
-package utils;
+package dulinglai.android.alode.utils;
 
-import config.GlobalConfigs;
-
+import dulinglai.android.alode.config.GlobalConfigs;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
+import org.pmw.tinylog.Logger;
 
 import java.io.*;
 
@@ -26,14 +26,13 @@ public class FileUtils {
         Process p = pb.start();
     }
 
-    public static boolean validateFile(String filePath){
-        File file = new File(filePath);
-        return file.exists() && !file.isDirectory();
+    public static boolean validateFile(String filePath) {
+        File f = new File(filePath);
+        return f.exists();
     }
 
-    public static boolean validateDir(String dirPath){
-        File file = new File(dirPath);
-        return file.exists() && file.isDirectory();
+    public static void constructWidgetHashmap(String widgetMapFile){
+
     }
 
 
@@ -50,7 +49,7 @@ public class FileUtils {
                 if (outputPathFile!=null)
                     config.setOutputPath(outputPathFile);
                 else {
-                    System.out.println("ERROR: Output path needs to be specified either in config.properties or through command line options!");
+                    Logger.error("*** ERROR: Output path needs to be specified either in config.properties or through command line options!");
                     System.exit(2);
                 }
             } else {
@@ -68,7 +67,7 @@ public class FileUtils {
                 if (androidSdkFile!=null)
                     config.setAndroidSdkPath(androidSdkFile);
                 else {
-                    System.out.println("ERROR: Android SDK path needs to be specified either in config.properties or through command line options!");
+                    Logger.error("*** ERROR: Android SDK path needs to be specified either in config.properties or through command line options!");
                     System.exit(2);
                 }
             } else {
@@ -90,7 +89,7 @@ public class FileUtils {
             }
 
         } catch (ConfigurationException ex){
-            System.err.println(ex.getMessage());
+            Logger.error(ex.getMessage());
         }
     }
 }

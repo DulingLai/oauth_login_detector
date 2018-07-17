@@ -1,9 +1,13 @@
-import config.GlobalConfigs;
-import org.apache.commons.cli.*;
-import utils.FileUtils;
+package dulinglai.android.alode;
 
-import java.io.File;
-import java.io.IOException;
+import dulinglai.android.alode.config.GlobalConfigs;
+import dulinglai.android.alode.config.soot.SootSettings;
+import dulinglai.android.alode.utils.FileUtils;
+import dulinglai.android.alode.utils.resourcesParser.AppResources;
+import org.apache.commons.cli.*;
+import org.pmw.tinylog.Configurator;
+import org.pmw.tinylog.Level;
+import org.pmw.tinylog.Logger;
 
 public class MainClass {
 
@@ -13,6 +17,9 @@ public class MainClass {
     private static final String INPUT_APK_PATH_CONFIG = "i";
     private static final String OUTPUT_APK_PATH_CONFIG = "o";
 
+    // Analysis Config
+    private static final String CG_ALGO = "cg";
+
     // Android
     private static final String ANDROID_SDK_PATH_CONFIG = "s";
     private static final String ANDROID_API_LEVEL_CONFIG = "l";
@@ -20,7 +27,7 @@ public class MainClass {
     // Program Config
     private static final String DEBUG_CONFIG = "d";
     private static final String HELP_CONFIG = "h";
-    private static final String VERBOSE_CONFIG = "v";
+    private static final String VERSION_CONFIG = "v";
 
     private MainClass(){
         setupCmdOptions();
@@ -35,25 +42,22 @@ public class MainClass {
         Option output = Option.builder(OUTPUT_APK_PATH_CONFIG).required(false).longOpt("output").hasArg(true).desc("output directory (required)").build();
         Option sdkPath = Option.builder(ANDROID_SDK_PATH_CONFIG).required(false).longOpt("sdk").hasArg(true).desc("path to android sdk (default value can be set in config file)").build();
         Option apiLevel = Option.builder(ANDROID_API_LEVEL_CONFIG).required(false).type(Number.class).longOpt("api").hasArg(true).desc("api level (default to 23)").build();
+        Option cgAlgo = Option.builder(CG_ALGO).required(false).hasArg(true).desc("Callgraph algorithm to use (AUTO, CHA, VTA, RTA, SPARK, GEOM); default: AUTO").build();
         Option debug = new Option(DEBUG_CONFIG, "debug", false, "debug mode (default disabled)");
         Option help = new Option(HELP_CONFIG, "help", false, "print the help message");
-        Option verbose = new Option( VERBOSE_CONFIG,"verbose", false,"verbose mode: print more info (default: disabled)" );
+        Option version = new Option( VERSION_CONFIG,"version", false,"print version info" );
 
         // add the options
         options.addOption(input);
         options.addOption(output);
         options.addOption(sdkPath);
         options.addOption(apiLevel);
+        options.addOption(cgAlgo);
         options.addOption(debug);
         options.addOption(help);
-        options.addOption(verbose);
+        options.addOption(version);
     }
 
-    /**
-     *  the main function - entry point of the program
-     * @param args The command line arguments
-     * @throws Exception
-     */
     public static void main(String[] args) throws Exception{
         MainClass mainClass = new MainClass();
         mainClass.run(args);
@@ -83,6 +87,12 @@ public class MainClass {
                 return;
             }
 
+            // display version info and exit
+            if (cmd.hasOption(VERSION_CONFIG) || cmd.hasOption("version")){
+                System.out.println("alode " + getClass().getPackage().getImplementationVersion());
+                return;
+            }
+
             // instance of the config obj
             GlobalConfigs config = new GlobalConfigs();
 
@@ -90,18 +100,23 @@ public class MainClass {
             parseOptions(cmd, config);
 
             // print the options for debugging
-            if(config.getDebugConfig()){
-                System.out.println("[DEBUG] Project Dir: "+config.getProjectPath());
-                System.out.println("[DEBUG] Input APK path: "+config.getInputApkPath());
-                System.out.println("[DEBUG] Output path: "+config.getOutputPath());
-                System.out.println("[DEBUG] Android SDK path: "+config.getAndroidSdkPath());
-                System.out.println("[DEBUG] Android API level: "+config.getAndroidApiLevel());
-                System.out.println("[DEBUG] Android JAR: "+config.getAndroidJarPath());
-            }
+            Logger.debug("Project Dir: "+config.getProjectPath());
+            Logger.debug("Input APK path: "+config.getInputApkPath());
+            Logger.debug("Output path: "+config.getOutputPath());
+            Logger.debug("Android SDK path: "+config.getAndroidSdkPath());
+            Logger.debug("Android API level: "+config.getAndroidApiLevel());
+            Logger.debug("Android JAR: "+config.getAndroidJarPath());
+
+            // Setup Soot for analysis
+            SootSettings sootSettings = new SootSettings(config);
+            sootSettings.initializeSoot();
+
+            // parse the app resources
+            AppResources appResources = new AppResources(config.getInputApkPath());
 
         } catch (ParseException e) {
             // print the error message
-            System.err.println(e.getMessage());
+            Logger.error(e.getMessage());
             formatter.printHelp("alode", options, true);
             System.exit(1);
         }
@@ -114,10 +129,10 @@ public class MainClass {
         // Set apk path and output path
         if (cmd.hasOption(INPUT_APK_PATH_CONFIG) || cmd.hasOption("input")) {
             String apkFile = cmd.getOptionValue(INPUT_APK_PATH_CONFIG);
-            if (apkFile != null && !apkFile.isEmpty() && FileUtils.validateFile(apkFile))
+            if (apkFile != null && !apkFile.isEmpty())
                 config.setInputApkPath(apkFile);
         } else{
-            System.out.println("ERROR: Input APK path is required!");
+            Logger.error("ERROR: Input APK path is required!");
             System.exit(1);
         }
 
@@ -136,37 +151,47 @@ public class MainClass {
         if (cmd.hasOption(ANDROID_API_LEVEL_CONFIG) || cmd.hasOption("api")) {
             int apiLevel = Integer.parseInt(cmd.getOptionValue(ANDROID_API_LEVEL_CONFIG));
             config.setAndroidApiLevel(apiLevel);
+            config.setForceAndroidJar(true);
         }
 
-        // verbose setting
-        if (cmd.hasOption(VERBOSE_CONFIG) || cmd.hasOption("verbose"))
-            config.setVerboseConfig(true);
-        else config.setVerboseConfig(false);
+        // analysis setting - callgraph construction
+        if (cmd.hasOption(CG_ALGO)){
+            String cg_algo = cmd.getOptionValue(CG_ALGO);
+            config.setCallgraphAlgorithm(cg_algo);
+        }
 
-        // debug setting
-        if (cmd.hasOption(DEBUG_CONFIG) || cmd.hasOption("debug"))
-            config.setDebugConfig(true);
-        else config.setDebugConfig(false);
+        // log level setting (debug/info/production)
+        if (cmd.hasOption(DEBUG_CONFIG) || cmd.hasOption("debug")){
+            Configurator.currentConfig().formatPattern("[{level}] {class}.{method}(): {message}").level(Level.DEBUG).activate();
+        } else{
+            Configurator.currentConfig().formatPattern("{level}: {message}").activate();
+        }
 
         // load the config file
-        String configFilePath = System.getProperty("user.dir") + "/res/config.properties";
+//        String configFilePath = System.getProperty("user.dir") + "/res/config.properties";
+        String configFilePath = "config.properties";
         FileUtils.loadConfigFile(configFilePath, config);
 
         // validate command line options
-        if (!FileUtils.validateDir(config.getOutputPath())){
-            System.err.println("ERROR: Wrong output path!");
+        if (!FileUtils.validateFile(config.getOutputPath())){
+            Logger.error("Wrong output path!");
             System.exit(1);
         }
         if (!FileUtils.validateFile(config.getInputApkPath())){
-            System.err.println("ERROR: Wrong input apk path!");
+            Logger.error("Wrong input apk path!");
             System.exit(1);
         }
-        if (!FileUtils.validateDir(config.getAndroidSdkPath())){
-            System.err.println("ERROR: Wrong android SDK path!");
+        if (!FileUtils.validateFile(config.getAndroidSdkPath())){
+            Logger.error("Wrong android SDK path!");
             System.exit(1);
         }
 
         // set the android JAR
-        config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-23/android.jar");
+        int targetApiLevel = config.getAndroidApiLevel();
+        if(targetApiLevel==23)
+            config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-23/android.jar");
+        else
+            config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-"+targetApiLevel+"/android.jar");
+
     }
 }

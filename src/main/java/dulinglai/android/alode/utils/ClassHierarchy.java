@@ -1,4 +1,4 @@
-package utils;
+package main.java.dulinglai.android.alode.utils;
 
 import com.google.common.collect.Maps;
 import soot.Scene;

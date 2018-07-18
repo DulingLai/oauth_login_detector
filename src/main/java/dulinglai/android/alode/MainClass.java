@@ -3,7 +3,7 @@ package dulinglai.android.alode;
 import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.utils.FileUtils;
-import dulinglai.android.alode.utils.resourcesParser.AppResources;
+import dulinglai.android.alode.resources.AppResources;
 import org.apache.commons.cli.*;
 import org.pmw.tinylog.Configurator;
 import org.pmw.tinylog.Level;
@@ -107,13 +107,8 @@ public class MainClass {
             Logger.debug("Android API level: "+config.getAndroidApiLevel());
             Logger.debug("Android JAR: "+config.getAndroidJarPath());
 
-            // Setup Soot for analysis
-            SootSettings sootSettings = new SootSettings(config);
-            sootSettings.initializeSoot();
-
-            // parse the app resources
-            AppResources appResources = new AppResources(config.getInputApkPath());
-
+            // Setup application for analysis
+            SetupApplication app = new SetupApplication(config);
         } catch (ParseException e) {
             // print the error message
             Logger.error(e.getMessage());
@@ -162,7 +157,7 @@ public class MainClass {
 
         // log level setting (debug/info/production)
         if (cmd.hasOption(DEBUG_CONFIG) || cmd.hasOption("debug")){
-            Configurator.currentConfig().formatPattern("[{level}] {class}.{method}(): {message}").level(Level.DEBUG).activate();
+            Configurator.currentConfig().formatPattern("[{level}] {class_name}.{method}(): {message}").level(Level.DEBUG).activate();
         } else{
             Configurator.currentConfig().formatPattern("{level}: {message}").activate();
         }

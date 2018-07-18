@@ -1,6 +1,7 @@
 package dulinglai.android.alode.config.soot;
 
 import dulinglai.android.alode.config.GlobalConfigs;
+import dulinglai.android.alode.utils.sootUtils.LibraryClassPatcher;
 import org.pmw.tinylog.Logger;
 import soot.G;
 import soot.PackManager;
@@ -35,17 +36,14 @@ public class SootSettings {
 
         Options.v().set_force_overwrite(true);
         Options.v().set_allow_phantom_refs(true);       // allow soot to create phantom ref for unknown classes
-        Options.v().set_prepend_classpath(true);        //prepend the VM's classpath to Soot's own classpath
-
         //prefer Android APK files// -src-prec apk
         Options.v().set_src_prec(Options.src_prec_apk_class_jimple);
         Options.v().set_whole_program(true);
-        Options.v().set_app(true);
 
         Options.v().set_output_format(Options.output_format_none);      //output as none
         Options.v().set_process_multiple_dex(true);     // enable analysis on multi-dex APKs
 
-        Options.v().set_android_jars(configs.getAndroidJarPath());       //Set android jar location
+        Options.v().set_android_jars(androidJar);       //Set android jar location
 
         // set target APK
         Options.v().set_process_dir(Collections.singletonList(apkFilePath));
@@ -54,6 +52,7 @@ public class SootSettings {
         Options.v().set_keep_line_number(false);
         Options.v().set_keep_offset(false);
         Options.v().set_throw_analysis(Options.throw_analysis_dalvik);
+        Options.v().set_ignore_resolution_errors(true);
 
         if (sootHelper != null)
             sootHelper.setSootExcludeLibs(Options.v());

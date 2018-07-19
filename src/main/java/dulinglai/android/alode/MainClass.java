@@ -19,6 +19,8 @@ public class MainClass {
 
     // Analysis Config
     private static final String CG_ALGO = "cg";
+    private static final String MAX_CALLBACK = "cb";
+    private static final String MAX_TIMEOUT = "t";
 
     // Android
     private static final String ANDROID_SDK_PATH_CONFIG = "s";
@@ -42,7 +44,9 @@ public class MainClass {
         Option output = Option.builder(OUTPUT_APK_PATH_CONFIG).required(false).longOpt("output").hasArg(true).desc("output directory (required)").build();
         Option sdkPath = Option.builder(ANDROID_SDK_PATH_CONFIG).required(false).longOpt("sdk").hasArg(true).desc("path to android sdk (default value can be set in config file)").build();
         Option apiLevel = Option.builder(ANDROID_API_LEVEL_CONFIG).required(false).type(Number.class).longOpt("api").hasArg(true).desc("api level (default to 23)").build();
-        Option cgAlgo = Option.builder(CG_ALGO).required(false).hasArg(true).desc("Callgraph algorithm to use (AUTO, CHA, VTA, RTA, SPARK, GEOM); default: AUTO").build();
+        Option maxCallback = Option.builder(MAX_CALLBACK).required(false).type(Number.class).hasArg(true).desc("the maximum number of callbacks modeled for each component (default to 20)").build();
+        Option cgAlgo = Option.builder(CG_ALGO).required(false).hasArg(true).desc("callgraph algorithm to use (AUTO, CHA, VTA, RTA, SPARK, GEOM); default: AUTO").build();
+        Option timeOut = Option.builder(MAX_TIMEOUT).required(false).hasArg(true).desc("maximum timeout during callback analysis in seconds (default: 60)").build();
         Option debug = new Option(DEBUG_CONFIG, "debug", false, "debug mode (default disabled)");
         Option help = new Option(HELP_CONFIG, "help", false, "print the help message");
         Option version = new Option( VERSION_CONFIG,"version", false,"print version info" );
@@ -53,6 +57,8 @@ public class MainClass {
         options.addOption(sdkPath);
         options.addOption(apiLevel);
         options.addOption(cgAlgo);
+        options.addOption(timeOut);
+        options.addOption(maxCallback);
         options.addOption(debug);
         options.addOption(help);
         options.addOption(version);
@@ -109,6 +115,10 @@ public class MainClass {
 
             // Setup application for analysis
             SetupApplication app = new SetupApplication(config);
+
+            // run the analysis
+            app.runAnalysis();
+
         } catch (ParseException e) {
             // print the error message
             Logger.error(e.getMessage());
@@ -149,18 +159,22 @@ public class MainClass {
             config.setForceAndroidJar(true);
         }
 
-        // analysis setting - callgraph construction
-        if (cmd.hasOption(CG_ALGO)){
-            String cg_algo = cmd.getOptionValue(CG_ALGO);
-            config.setCallgraphAlgorithm(cg_algo);
-        }
+        // analysis setting
+        if (cmd.hasOption(MAX_CALLBACK))
+            config.setMaxCallbacksPerComponent(Integer.parseInt(cmd.getOptionValue(MAX_CALLBACK)));
+
+        if (cmd.hasOption(CG_ALGO))
+            config.setCallgraphAlgorithm(cmd.getOptionValue(CG_ALGO));
+
+        if (cmd.hasOption(MAX_TIMEOUT))
+            config.setMaxTimeout(Long.parseLong(cmd.getOptionValue(MAX_TIMEOUT)));
+
 
         // log level setting (debug/info/production)
-        if (cmd.hasOption(DEBUG_CONFIG) || cmd.hasOption("debug")){
+        if (cmd.hasOption(DEBUG_CONFIG) || cmd.hasOption("debug"))
             Configurator.currentConfig().formatPattern("[{level}] {class_name}.{method}(): {message}").level(Level.DEBUG).activate();
-        } else{
+        else
             Configurator.currentConfig().formatPattern("{level}: {message}").activate();
-        }
 
         // load the config file
 //        String configFilePath = System.getProperty("user.dir") + "/res/config.properties";

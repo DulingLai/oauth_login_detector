@@ -17,17 +17,19 @@ public class GlobalConfigs {
 
     // analysis related configs
     private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
+    private int maxCallbacksPerComponent = 20;
+    private long maxTimeout = 60;
 
     // root directory of the project
-    private String project_path;
-    private String input_apk_path;
-    private String output_path;
+    private String projectPath;
+    private String inputApkPath;
+    private String outputPath;
 
     // Android OS related configs
-    private String android_sdk_path;
-    private String android_jar_path;
-    private int android_api_level = 23;
-    private boolean force_android_jar = false;
+    private String androidSdkPath;
+    private String androidJarPath;
+    private int androidApiLevel = 23;
+    private boolean forceAndroidJar = false;
 
 
     // Getters and setters for configuration variables
@@ -36,7 +38,7 @@ public class GlobalConfigs {
      * @return The current project working directory
      */
     public String getProjectPath(){
-        return project_path;
+        return projectPath;
     }
     /**
      * Sets the current project working directory
@@ -44,7 +46,7 @@ public class GlobalConfigs {
      *          The path to current project working directory
      */
     public void setProjectPath(String projectPath){
-        this.project_path = projectPath;
+        this.projectPath = projectPath;
     }
 
     /**
@@ -52,7 +54,7 @@ public class GlobalConfigs {
      * @return The path to the input apk file
      */
     public String getInputApkPath(){
-        return input_apk_path;
+        return inputApkPath;
     }
     /**
      * Sets the path to the input apk file
@@ -60,7 +62,7 @@ public class GlobalConfigs {
      *          The path to the input apk file
      */
     public void setInputApkPath(String inputApkPath){
-        this.input_apk_path = inputApkPath;
+        this.inputApkPath = inputApkPath;
     }
 
     /**
@@ -68,7 +70,7 @@ public class GlobalConfigs {
      * @return The output path
      */
     public String getOutputPath(){
-        return output_path;
+        return outputPath;
     }
     /**
      * Sets the directory for output files
@@ -76,7 +78,7 @@ public class GlobalConfigs {
      *          The path to the output directory
      */
     public void setOutputPath(String outputPath){
-        this.output_path = outputPath;
+        this.outputPath = outputPath;
     }
 
     /**
@@ -84,7 +86,7 @@ public class GlobalConfigs {
      * @return The directory in which Android SDK is located
      */
     public String getAndroidSdkPath(){
-        return android_sdk_path;
+        return androidSdkPath;
     }
     /**
      * Sets the Android SDK directory
@@ -92,7 +94,7 @@ public class GlobalConfigs {
      *          The directory in which Android SDK is located
      */
     public void setAndroidSdkPath(String androidSdkPath){
-        this.android_sdk_path = androidSdkPath;
+        this.androidSdkPath = androidSdkPath;
     }
 
     /**
@@ -100,7 +102,7 @@ public class GlobalConfigs {
      * @return The Android JAR Path
      */
     public String getAndroidJarPath(){
-        return android_jar_path;
+        return androidJarPath;
     }
     /**
      * Sets the path to Android JAR file
@@ -108,7 +110,7 @@ public class GlobalConfigs {
      *          The path to Android JAR file
      */
     public void setAndroidJarPath(String androidJarPath){
-        this.android_jar_path = androidJarPath;
+        this.androidJarPath = androidJarPath;
     }
 
     /**
@@ -116,7 +118,7 @@ public class GlobalConfigs {
      * @return The current Android API level setting
      */
     public int getAndroidApiLevel(){
-        return android_api_level;
+        return androidApiLevel;
     }
     /**
      * Sets the path to Android JAR file
@@ -124,7 +126,7 @@ public class GlobalConfigs {
      *          The target Android API level
      */
     public void setAndroidApiLevel(int androidApiLevel){
-        this.android_api_level = androidApiLevel;
+        this.androidApiLevel = androidApiLevel;
     }
 
     /**
@@ -132,7 +134,7 @@ public class GlobalConfigs {
      * @return The current force android jar setting
      */
     public boolean getForceAndroidJar() {
-        return force_android_jar;
+        return forceAndroidJar;
     }
     /**
      * Sets force android jar setting
@@ -140,7 +142,7 @@ public class GlobalConfigs {
      *          The target setting for forcing android jar
      */
     public void setForceAndroidJar(boolean force_android_jar) {
-        this.force_android_jar = force_android_jar;
+        this.forceAndroidJar = force_android_jar;
     }
 
     /**
@@ -154,6 +156,40 @@ public class GlobalConfigs {
      *          The callgraph algorithm to be used by the data flow tracker
      */
     public void setCallgraphAlgorithm(String algorithm){ this.callgraphAlgorithm = parseCallgraphAlgorithm(algorithm); }
+
+    /**
+     * Gets the maximum number of callbacks modeled for each component
+     * @return The maximum number of callbacks modeled for each component
+     */
+    public int getMaxCallbacksPerComponent() {
+        return maxCallbacksPerComponent;
+    }
+
+    /**
+     * Sets the maximum number of callbacks modeled for each component
+     * @param maxCallbacksPerComponent
+     *          The maximum number of callbacks modeled for each component
+     */
+    public void setMaxCallbacksPerComponent(int maxCallbacksPerComponent) {
+        this.maxCallbacksPerComponent = maxCallbacksPerComponent;
+    }
+
+    /**
+     * Gets the maximum timeout during callback analysis
+     * @return The maximum timeout during callback analysis
+     */
+    public long getMaxTimeout(){
+        return maxTimeout;
+    }
+    /**
+     * Sets the maximum timeout during callback analysis
+     * @param maxTimeout
+     *          The maximum timeout during callback analysis
+     */
+    public void setMaxTimeout(long maxTimeout){
+        this.maxTimeout = maxTimeout;
+    }
+
 
     // enum parsers
     private static CallgraphAlgorithm parseCallgraphAlgorithm(String algo) {

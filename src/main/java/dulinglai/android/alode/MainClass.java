@@ -41,7 +41,7 @@ public class MainClass {
     private void setupCmdOptions() {
         // command line options
         Option input = Option.builder(INPUT_APK_PATH_CONFIG).required(true).longOpt("input").hasArg(true).desc("input apk path (required)").build();
-        Option output = Option.builder(OUTPUT_APK_PATH_CONFIG).required(false).longOpt("output").hasArg(true).desc("output directory (required)").build();
+        Option output = Option.builder(OUTPUT_APK_PATH_CONFIG).required(false).longOpt("output").hasArg(true).desc("output directory (default to \"sootOutput\")").build();
         Option sdkPath = Option.builder(ANDROID_SDK_PATH_CONFIG).required(false).longOpt("sdk").hasArg(true).desc("path to android sdk (default value can be set in config file)").build();
         Option apiLevel = Option.builder(ANDROID_API_LEVEL_CONFIG).required(false).type(Number.class).longOpt("api").hasArg(true).desc("api level (default to 23)").build();
         Option maxCallback = Option.builder(MAX_CALLBACK).required(false).type(Number.class).hasArg(true).desc("the maximum number of callbacks modeled for each component (default to 20)").build();

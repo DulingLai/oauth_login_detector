@@ -14,16 +14,31 @@ public class GlobalConfigs {
     public enum CallgraphAlgorithm {
         AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM
     }
+    /**
+     * Enumeration containing the supported callback analyzers
+     */
+    public enum CallbackAnalyzer {
+        /**
+         * The highly-precise default analyzer
+         */
+        Default,
+        /**
+         * An analyzer that favors performance over precision
+         */
+        Fast
+    }
 
     // analysis related configs
     private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
-    private int maxCallbacksPerComponent = 20;
-    private long maxTimeout = 60;
+    private int maxCallbacksPerComponent = 100;
+    private long maxTimeout = 0;
+    private CallbackAnalyzer callbackAnalyzer = CallbackAnalyzer.Default;
+    private int maxCallbackAnalysisDepth = 0;
 
     // root directory of the project
     private String projectPath;
     private String inputApkPath;
-    private String outputPath;
+    private String outputPath = "sootOutput";
 
     // Android OS related configs
     private String androidSdkPath;
@@ -33,6 +48,9 @@ public class GlobalConfigs {
 
 
     // Getters and setters for configuration variables
+    /*
+    Project related
+     */
     /**
      * Gets the current project working directory
      * @return The current project working directory
@@ -145,6 +163,10 @@ public class GlobalConfigs {
         this.forceAndroidJar = force_android_jar;
     }
 
+
+    /*
+    Analysis related
+    */
     /**
      * Gets the callgraph algorithm to be used by the data flow tracker
      * @return The callgraph algorithm to be used by the data flow tracker
@@ -188,6 +210,39 @@ public class GlobalConfigs {
      */
     public void setMaxTimeout(long maxTimeout){
         this.maxTimeout = maxTimeout;
+    }
+
+    /**
+     * Gets the maximum callback resolve depth during callback analysis
+     * @return The maximum callback resolve depth during callback analysis
+     */
+    public int getMaxCallbackAnalysisDepth(){
+        return maxCallbackAnalysisDepth;
+    }
+    /**
+     * Sets the maximum callback resolve depth during callback analysis
+     * @param maxCallbackAnalysisDepth
+     *          The maximum callback resolve depth during callback analysis
+     */
+    public void setMaxCallbackAnalysisDepth(int maxCallbackAnalysisDepth){
+        this.maxCallbackAnalysisDepth = maxCallbackAnalysisDepth;
+    }
+
+    /**
+     * Gets the type of analyzer used during callback analysis
+     * @return The type of analyzer used during callback analysis
+     */
+    public CallbackAnalyzer getCallbackAnalyzer() {
+        return callbackAnalyzer;
+    }
+
+    /**
+     * Sets the type of analyzer used during callback analysis
+     * @param callbackAnalyzer
+     *          The type of analyzer used during callback analysis
+     */
+    public void setCallbackAnalyzer(CallbackAnalyzer callbackAnalyzer) {
+        this.callbackAnalyzer = callbackAnalyzer;
     }
 
 

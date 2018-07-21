@@ -32,7 +32,7 @@ public class GlobalConfigs {
     private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
     private int maxCallbacksPerComponent = 100;
     private long maxTimeout = 0;
-    private CallbackAnalyzer callbackAnalyzer = CallbackAnalyzer.Default;
+    private CallbackAnalyzer callbackAnalyzer = CallbackAnalyzer.Fast;
     private int maxCallbackAnalysisDepth = 0;
 
     // root directory of the project

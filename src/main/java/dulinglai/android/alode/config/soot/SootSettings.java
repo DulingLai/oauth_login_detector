@@ -58,7 +58,8 @@ public class SootSettings {
             sootHelper.setSootExcludeLibs(Options.v());
 
         // set classpath
-        Options.v().set_soot_classpath(getClasspath(androidJar, configs.getAndroidSdkPath(), apkFilePath, configs.getForceAndroidJar()));
+//        Options.v().set_soot_classpath(getClasspath(androidJar, configs.getAndroidSdkPath(), apkFilePath, configs.getForceAndroidJar()));
+        Options.v().set_soot_classpath("ic3-android.jar");
 
         soot.Main.v().autoSetOptions();
 

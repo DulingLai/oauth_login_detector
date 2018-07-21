@@ -24,5 +24,7 @@
     <orderEntry type="library" name="sootclasses-trunk-jar-with-dependencies" level="project" />
     <orderEntry type="library" name="coal-0.1.7" level="project" />
     <orderEntry type="library" name="coal-strings-0.1.2" level="project" />
+    <orderEntry type="library" name="slf4j-api-1.7.7" level="project" />
+    <orderEntry type="library" name="ic3-android" level="project" />
   </component>
 </module>

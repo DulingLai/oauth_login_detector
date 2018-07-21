@@ -48,7 +48,7 @@ java -jar {ALODE_JAR_PATH} alode [OPTIONS] [-cb <arg>] [-cg <arg>] [-d] [-h] -i 
 ### Example Usages
 
 To be updated later
-```
+
 
 ## Authors
 

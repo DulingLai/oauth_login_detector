@@ -248,6 +248,8 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 	 * Finds the mappings between classes and their respective layout files
 	 */
 	private void findClassLayoutMappings() {
+		SootClass mainclass = Scene.v().getMainClass();
+		Iterator<SootClass> classIterator = Scene.v().getApplicationClasses().iterator();
 		Iterator<MethodOrMethodContext> rmIterator = Scene.v().getReachableMethods().listener();
 		while (rmIterator.hasNext()) {
 			SootMethod sm = rmIterator.next().method();

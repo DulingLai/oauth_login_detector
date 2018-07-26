@@ -11,8 +11,6 @@ import dulinglai.android.alode.callbacks.filters.UnreachableConstructorFilter;
 import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointCreator;
-import dulinglai.android.alode.ic3.Ic3Analysis;
-import dulinglai.android.alode.ic3.Ic3Config;
 import dulinglai.android.alode.iccta.IccInstrumenter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.MemoryWatcher;
@@ -53,6 +51,9 @@ public class SetupApplication {
     private long maxTimeout;
     private int maxCallbackAnalysisDepth;
 
+    // widgets
+    private MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
+
     // IccTA
     private IccInstrumenter iccInstrumenter = null;
     private String iccModel = null;
@@ -82,7 +83,7 @@ public class SetupApplication {
 
     public void runAnalysis(){
 
-        // Calculate the callback methods
+        // Calculate the callback methods (we also get the class <-> layout mapping here
         try {
             calculateCallbacks();
         }catch (IOException ex){
@@ -90,20 +91,21 @@ public class SetupApplication {
             ex.printStackTrace();
         }
 
-        // Run IC3
-        runIC3();
-
         // Obtain intents with iccta
     }
 
-    public void runIC3(){
-        // read configuration
-        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
+    public void collectWidgetClassMapping(){
 
-        // run analysis
-        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints);
-        ic3Analysis.performAnalysis(ic3Config);
     }
+
+//    public void runIC3(){
+//        // read configuration
+//        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
+//
+//        // run analysis
+//        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints);
+//        ic3Analysis.performAnalysis(ic3Config);
+//    }
 
 
     // TODO: current method values performance over precision, check if we need more precise approach
@@ -294,6 +296,19 @@ public class SetupApplication {
         PackManager.v().getPack("wjtp").remove("wjtp.lfp");
         PackManager.v().getPack("wjtp").remove("wjtp.ajc");
 
+        // get the layout class maps
+        layoutClasses = callbackAnalyzer.getLayoutClasses();
+        // Debug logging
+        Logger.debug("[LayoutClass] print lay out classes: ");
+        for (SootClass layoutClass : layoutClasses.keySet()){
+            Logger.debug("[LayoutClass] {} -> {}", layoutClass, layoutClasses.get(layoutClass));
+        }
+        Logger.debug("[UserControl] print user controls: ");
+        for (String layoutKey : layoutFileParser.getUserControls().keySet()){
+            Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
+        }
+
+
         // Warn the user if we had to abort the callback analysis early
         boolean abortedEarly = false;
         if (callbackAnalyzer instanceof IMemoryBoundedSolver) {
@@ -343,6 +358,16 @@ public class SetupApplication {
         resetCallgraph();
         createMainMethod();
         constructCallgraphInternal();
+
+        // get the layout class maps
+        layoutClasses = callbackAnalyzer.getLayoutClasses();
+        // Debug logging
+        for (SootClass layoutClass : layoutClasses.keySet()){
+            Logger.debug("[LayoutClass] {} - map -> {}", layoutClass, layoutClasses.get(layoutClass));
+        }
+        for (String layoutKey : layoutFileParser.getUserControls().keySet()){
+            Logger.debug("[UserControl] {} - map -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
+        }
     }
 
     private void createEntrypoints() {

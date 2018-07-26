@@ -16,7 +16,7 @@ public class SootSettings {
 
     // TODO: insert config params that can be set on runtime
     private SootHelper sootHelper = new SootHelper();
-    private GlobalConfigs configs = new GlobalConfigs();
+    private GlobalConfigs configs;
 
     public SootSettings(GlobalConfigs config){
         this.configs = config;
@@ -58,8 +58,7 @@ public class SootSettings {
             sootHelper.setSootExcludeLibs(Options.v());
 
         // set classpath
-//        Options.v().set_soot_classpath(getClasspath(androidJar, configs.getAndroidSdkPath(), apkFilePath, configs.getForceAndroidJar()));
-        Options.v().set_soot_classpath("ic3-android.jar");
+        Options.v().set_soot_classpath(getClasspath(androidJar, configs.getAndroidSdkPath(), apkFilePath, configs.getForceAndroidJar()));
 
         soot.Main.v().autoSetOptions();
 
@@ -91,7 +90,7 @@ public class SootSettings {
      */
     private String getClasspath(String androidJar, String androidSdk, String apkFileLocation, boolean forceAndroidJar) {
 //        final String additionalClasspath = configs.getAdditionalClasspath();
-        String androidPlatform = androidSdk + "platforms";
+        String androidPlatform = androidSdk + "/platforms";
 
         String classpath = forceAndroidJar? androidJar : Scene.v().getAndroidJarPath(androidPlatform, apkFileLocation);
 //        if (additionalClasspath != null && !additionalClasspath.isEmpty())

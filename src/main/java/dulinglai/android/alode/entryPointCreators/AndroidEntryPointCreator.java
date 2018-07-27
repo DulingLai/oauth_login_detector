@@ -107,7 +107,7 @@ public class AndroidEntryPointCreator extends AbstractAndroidEntryPointCreator i
 		reset();
 
 		// For some weird reason unknown to anyone except the flying spaghetti
-		// monster, the onCreate() methods of content providers run even before
+		// monster, the onCreate() methods of content providerNodes run even before
 		// the application object's onCreate() is called.
 		{
 			boolean hasContentProviders = false;

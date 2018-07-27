@@ -31,7 +31,7 @@ import dulinglai.android.alode.entryPointCreators.SimulatedCodeElementTag;
 import soot.util.MultiMap;
 
 /**
- * Entry point creator for Android activities
+ * Entry point creator for Android activityNodes
  * 
  * @author Steven Arzt
  *

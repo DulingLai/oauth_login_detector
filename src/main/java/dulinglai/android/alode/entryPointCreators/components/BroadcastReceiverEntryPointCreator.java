@@ -7,7 +7,7 @@ import soot.jimple.Stmt;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
 
 /**
- * Entry point creator for Android broadcast receivers
+ * Entry point creator for Android broadcast receiverNodes
  * 
  * @author Steven Arzt
  *

@@ -11,6 +11,7 @@ import dulinglai.android.alode.callbacks.filters.UnreachableConstructorFilter;
 import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointCreator;
+import dulinglai.android.alode.graph.ActivityWidgetTransitionGraph;
 import dulinglai.android.alode.iccta.IccInstrumenter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.MemoryWatcher;
@@ -53,10 +54,17 @@ public class SetupApplication {
 
     // widgets
     private MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
+    private MultiMap<SootClass, CallbackDefinition> uicallbacks = new HashMultiMap<>();
+
+    // Activity Widget Graph
+    private ActivityWidgetTransitionGraph awtg;
 
     // IccTA
     private IccInstrumenter iccInstrumenter = null;
     private String iccModel = null;
+
+    // results
+    private ResultWriter resultWriter;
 
 
     public SetupApplication(GlobalConfigs config) {
@@ -71,31 +79,50 @@ public class SetupApplication {
         this.androidJar = config.getAndroidJarPath();
         this.outputDir = config.getOutputPath();
 
+        // Setup result writer
+        this.resultWriter = new ResultWriter(this.packageName, this.outputDir);
+
         // Setup analysis config
         this.callbackAnalyzerType = config.getCallbackAnalyzer();
         this.maxCallbacksPerComponent = config.getMaxCallbacksPerComponent();
         this.maxTimeout = config.getMaxTimeout();
         this.maxCallbackAnalysisDepth = config.getMaxCallbackAnalysisDepth();
 
-        // Create entry points
-        createEntrypoints();
+        // Create the initial entry point - launchable activities
+        entryPointString = appResources.getLaunchableActivities();
+        entrypoints = new HashSet<>(entryPointString.size());
+        for (String className : entryPointString){
+            SootClass sc = Scene.v().getSootClassUnsafe(className);
+            if (sc != null)
+                entrypoints.add(sc);
+        }
+        // Check if the entry points have been successfully created
+        if (entrypoints == null || entrypoints.isEmpty()) {
+            Logger.error("No entry points");
+            entryPointString = appResources.getManifest().getEntryPointClasses();
+            entrypoints = new HashSet<>(entryPointString.size());
+            for (String className : entryPointString){
+                SootClass sc = Scene.v().getSootClassUnsafe(className);
+                if (sc != null)
+                    entrypoints.add(sc);
+            }
+        }
+
+        // AWTG
+        this.awtg = appResources.getManifest().getAwtg();
     }
 
     public void runAnalysis(){
-
-        // Calculate the callback methods (we also get the class <-> layout mapping here
-        try {
-            calculateCallbacks();
-        }catch (IOException ex){
-            Logger.error(ex.getMessage());
-            ex.printStackTrace();
+        // We process one launchable activity as entry point at once
+        for (SootClass component : entrypoints) {
+            // Calculate the callback methods (we also get the class <-> layout mapping here
+            try {
+                calculateCallbacks(component);
+            } catch (IOException ex) {
+                Logger.error(ex.getMessage());
+                ex.printStackTrace();
+            }
         }
-
-        // Obtain intents with iccta
-    }
-
-    public void collectWidgetClassMapping(){
-
     }
 
 //    public void runIC3(){
@@ -109,16 +136,16 @@ public class SetupApplication {
 
 
     // TODO: current method values performance over precision, check if we need more precise approach
-    private void calculateCallbacks() throws IOException {
-        LayoutFileParser layoutFileParser = new LayoutFileParser(appResources.getAppName(), appResources.getResources());
+    private void calculateCallbacks(SootClass component) throws IOException {
+        LayoutFileParser layoutFileParser = new LayoutFileParser(packageName, appResources.getResources());
 
         // Choose between fast callback analyzer or default callback analyzer
         switch (callbackAnalyzerType){
             case Fast:
-                calculateCallbackMethodsFast(layoutFileParser);
+                calculateCallbackMethodsFast(layoutFileParser, component);
                 break;
             case Default:
-                calculateCallbackMethods(layoutFileParser);
+                calculateCallbackMethods(layoutFileParser, component);
                 break;
             default:
                 throw new RuntimeException("Unknown callback analyzer");
@@ -126,8 +153,14 @@ public class SetupApplication {
 
         Logger.info("Entry point calculation done.");
 
-        // Get the callbacks for the current entry point
-        Set<CallbackDefinition> callbacks = this.callbackMethods.values();
+        // Find all UI callbacks
+        for (SootClass callback : callbackMethods.keySet()){
+            for (CallbackDefinition callbackDefinition : callbackMethods.get(callback)){
+                if (callbackDefinition.getCallbackType() == CallbackDefinition.CallbackType.Widget){
+                    uicallbacks.put(callback, callbackDefinition);
+                }
+            }
+        }
     }
 
     /**
@@ -139,7 +172,7 @@ public class SetupApplication {
      * @throws IOException
      *             Thrown if a required configuration cannot be read
      */
-    private void calculateCallbackMethods(LayoutFileParser layoutFileParser) throws IOException {
+    private void calculateCallbackMethods(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
         // cleanup the callgraph
         resetCallgraph();
 
@@ -148,13 +181,13 @@ public class SetupApplication {
         PackManager.v().getPack("wjtp").remove("wjtp.ajc");
 
         // Get the classes for which to find callbacks
-        Set<SootClass> entryPointClasses = entrypoints;
+        Set<SootClass> entryPointClasses = getComponentsToAnalyze(component);
 
         // Collect the callback interfaces implemented in the app's
         // source code. Note that the filters should know all components to
         // filter out callbacks even if the respective component is only
         // analyzed later.
-        AbstractCallbackAnalyzer callbackAnalyzer = new DefaultCallbackAnalyzer(entryPointClasses, maxCallbacksPerComponent);
+        AbstractCallbackAnalyzer callbackAnalyzer = new DefaultCallbackAnalyzer(entryPointClasses, maxCallbacksPerComponent, resultWriter);
 
         callbackAnalyzer.addCallbackFilter(new AlienHostComponentFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new ApplicationCallbackFilter(entrypoints));
@@ -194,7 +227,7 @@ public class SetupApplication {
                 }
 
                 // Create the new iteration of the main method
-                createMainMethod();
+                createMainMethod(component);
 
                 // Since the gerenation of the main method can take some time,
                 // we check again whether we need to stop.
@@ -331,17 +364,17 @@ public class SetupApplication {
      * @throws IOException
      *             Thrown if a required configuration cannot be read
      */
-    private void calculateCallbackMethodsFast(LayoutFileParser layoutFileParser) throws IOException {
+    private void calculateCallbackMethodsFast(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
         // Construct new callgraph
         resetCallgraph();
-        createMainMethod();
+        createMainMethod(component);
         constructCallgraphInternal();
 
         // Get the entry-point classes
-        Set<SootClass> entryPointClasses = this.entrypoints;
+        Set<SootClass> entryPointClasses = getComponentsToAnalyze(component);
 
         // Collect the callback interfaces implemented in the app's source code
-        AbstractCallbackAnalyzer callbackAnalyzer = new FastCallbackAnalyzer(entryPointClasses);
+        AbstractCallbackAnalyzer callbackAnalyzer = new FastCallbackAnalyzer(entryPointClasses, resultWriter);
         callbackAnalyzer.collectCallbackMethods();
 
         // Collect the results
@@ -356,22 +389,25 @@ public class SetupApplication {
 
         // Construct the final callgraph
         resetCallgraph();
-        createMainMethod();
+        createMainMethod(component);
         constructCallgraphInternal();
 
         // get the layout class maps
         layoutClasses = callbackAnalyzer.getLayoutClasses();
         // Debug logging
         for (SootClass layoutClass : layoutClasses.keySet()){
-            Logger.debug("[LayoutClass] {} - map -> {}", layoutClass, layoutClasses.get(layoutClass));
+            Logger.debug("[LayoutClass] {} -> {}", layoutClass, layoutClasses.get(layoutClass));
+            if (awtg.getActivityByName(layoutClass.getName())!=null) {
+                awtg.getActivityByName(layoutClass.getName()).setResourceId(layoutClasses.get(layoutClass).iterator().next());
+            }
         }
         for (String layoutKey : layoutFileParser.getUserControls().keySet()){
-            Logger.debug("[UserControl] {} - map -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
+            Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
         }
     }
 
     private void createEntrypoints() {
-        //TODO Check if we need all those entry points (the original code models all activity, services, providers and receivers)
+        //TODO Check if we need all those entry points (the original code models all activity, serviceNodes, providerNodes and receiverNodes)
         // Create entry points
         entryPointString = appResources.getEntryPoints();
         entrypoints = new HashSet<>(entryPointString.size());
@@ -398,8 +434,8 @@ public class SetupApplication {
     }
 
 
-    private void createMainMethod(){
-        entryPointCreator = createEntryPointCreator();
+    private void createMainMethod(SootClass component){
+        entryPointCreator = createEntryPointCreator(component);
         SootMethod dummyMainMethod = entryPointCreator.createDummyMain();
         Scene.v().setEntryPoints(Collections.singletonList(dummyMainMethod));
         if (!dummyMainMethod.getDeclaringClass().isInScene())
@@ -416,8 +452,8 @@ public class SetupApplication {
      * @return The {@link AndroidEntryPointCreator} responsible for generating the
      *         dummy main method
      */
-    private AndroidEntryPointCreator createEntryPointCreator() {
-        Set<SootClass> components = this.entrypoints;
+    private AndroidEntryPointCreator createEntryPointCreator(SootClass component) {
+        Set<SootClass> components = getComponentsToAnalyze(component);
 
         // If we we already have an entry point creator, we make sure to clean up our
         // leftovers from previous runs
@@ -429,12 +465,22 @@ public class SetupApplication {
         }
 
         MultiMap<SootClass, SootMethod> callbackMethodSigs = new HashMultiMap<>();
-        // Get all callbacks for all components
-        for (SootClass sc : this.callbackMethods.keySet()) {
-            Set<CallbackDefinition> callbackDefs = this.callbackMethods.get(sc);
-            if (callbackDefs != null)
-                for (CallbackDefinition cd : callbackDefs)
-                    callbackMethodSigs.put(sc, cd.getTargetMethod());
+        if (component == null) {
+            // Get all callbacks for all components
+            for (SootClass sc : this.callbackMethods.keySet()) {
+                Set<CallbackDefinition> callbackDefs = this.callbackMethods.get(sc);
+                if (callbackDefs != null)
+                    for (CallbackDefinition cd : callbackDefs)
+                        callbackMethodSigs.put(sc, cd.getTargetMethod());
+            }
+        } else {
+            // Get the callbacks for the current component only
+            for (SootClass sc : components) {
+                Set<CallbackDefinition> callbackDefs = this.callbackMethods.get(sc);
+                if (callbackDefs != null)
+                    for (CallbackDefinition cd : callbackDefs)
+                        callbackMethodSigs.put(sc, cd.getTargetMethod());
+            }
         }
 
         entryPointCreator.setCallbackFunctions(callbackMethodSigs);
@@ -594,6 +640,33 @@ public class SetupApplication {
                     this.callbackMethods.put(callbackClass,
                             new CallbackDefinition(sm, parentMethod, CallbackDefinition.CallbackType.Widget));
             }
+        }
+    }
+
+    /**
+     * Gets the components to analyze. If the given component is not null, we assume
+     * that only this component and the application class (if any) shall be
+     * analyzed. Otherwise, all components are to be analyzed.
+     *
+     * @param component
+     *            A component class name to only analyze this class and the
+     *            application class (if any), or null to analyze all classes.
+     * @return The set of classes to analyze
+     */
+    private Set<SootClass> getComponentsToAnalyze(SootClass component) {
+        if (component == null)
+            return this.entrypoints;
+        else {
+            // We always analyze the application class together with each
+            // component
+            // as there might be interactions between the two
+            Set<SootClass> components = new HashSet<>(2);
+            components.add(component);
+
+            String applicationName = this.appResources.getManifest().getApplicationName();
+            if (applicationName != null && !applicationName.isEmpty())
+                components.add(Scene.v().getSootClassUnsafe(applicationName));
+            return components;
         }
     }
 

@@ -19,7 +19,7 @@ import dulinglai.android.alode.entryPointCreators.AndroidEntryPointUtils.Compone
 import dulinglai.android.alode.entryPointCreators.SimulatedCodeElementTag;
 
 /**
- * Entry point creator for Android services
+ * Entry point creator for Android serviceNodes
  * 
  * @author Steven Arzt
  *

@@ -31,11 +31,6 @@ public class FileUtils {
         return f.exists();
     }
 
-    public static void constructWidgetHashmap(String widgetMapFile){
-
-    }
-
-
     public static void loadConfigFile(String configFilePath, GlobalConfigs config){
         // load properties from the config file
         try {

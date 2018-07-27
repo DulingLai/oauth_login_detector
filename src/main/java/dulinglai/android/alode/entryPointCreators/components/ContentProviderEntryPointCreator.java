@@ -5,7 +5,7 @@ import soot.jimple.Jimple;
 import soot.jimple.NopStmt;
 
 /**
- * Entry point creator for content providers
+ * Entry point creator for content providerNodes
  * 
  * @author Steven Arzt
  *

@@ -4,21 +4,23 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 
+import dulinglai.android.alode.graph.ActivityNode;
+import dulinglai.android.alode.graph.ActivityWidgetTransitionGraph;
+import dulinglai.android.alode.graph.ServiceNode;
 import org.xmlpull.v1.XmlPullParserException;
-
 import pxb.android.axml.AxmlVisitor;
+
 import dulinglai.android.alode.resources.axml.AXmlAttribute;
 import dulinglai.android.alode.resources.axml.AXmlHandler;
 import dulinglai.android.alode.resources.axml.AXmlNode;
 import dulinglai.android.alode.resources.axml.ApkHandler;
 import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+
+import static dulinglai.android.alode.graph.NodeUtils.expandClassName;
+import static dulinglai.android.alode.graph.NodeUtils.isValidComponentName;
 
 /**
  * This class provides easy access to all data of an AppManifest.<br />
@@ -32,6 +34,8 @@ import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
  *      Manifest</a>
  */
 public class ProcessManifest {
+
+    public String packageName;
 
 	/**
 	 * Enumeration containing the various component types supported in Android
@@ -55,10 +59,13 @@ public class ProcessManifest {
 	protected AXmlNode application;
 
 	// Components in the manifest file
-	protected List<AXmlNode> providers = null;
-	protected List<AXmlNode> services = null;
-	protected List<AXmlNode> activities = null;
-	protected List<AXmlNode> receivers = null;
+    private List<AXmlNode> providerNodes = null;
+	private List<AXmlNode> serviceNodes = null;
+	private List<AXmlNode> activityNodes = null;
+	private List<AXmlNode> receiverNodes = null;
+
+    private ActivityWidgetTransitionGraph awtg;
+    private Set<String> launchableActivities = new HashSet<>();
 
 	/**
 	 * Processes an AppManifest which is within the file identified by the given
@@ -150,30 +157,40 @@ public class ProcessManifest {
 			throw new RuntimeException("Manifest contains more than one application node");
 		this.application = applications.get(0);
 
+		this.packageName = getManifestPackageName();
+
 		// Get components
-		this.providers = this.axml.getNodesWithTag("provider");
-		this.services = this.axml.getNodesWithTag("service");
-		this.activities = this.axml.getNodesWithTag("activity");
-		this.receivers = this.axml.getNodesWithTag("receiver");
+		this.providerNodes = this.axml.getNodesWithTag("provider");
+		this.serviceNodes = this.axml.getNodesWithTag("service");
+		this.activityNodes = this.axml.getNodesWithTag("activity");
+		this.receiverNodes = this.axml.getNodesWithTag("receiver");
+
+		// Process activityNodes and serviceNodes
+        Set<ActivityNode> activities = new HashSet<>();
+        Set<ServiceNode> services = new HashSet<>();
+        for (AXmlNode activityNode : activityNodes){
+            activities.add(new ActivityNode(activityNode, packageName));
+        }
+        for (AXmlNode serviceNode : serviceNodes){
+            services.add(new ServiceNode(serviceNode, packageName));
+        }
+        awtg = new ActivityWidgetTransitionGraph(activities, services);
+
+        // launchable activities
+        Set<AXmlNode> launchableNodes = getLaunchableActivityNodes();
+        for (AXmlNode node : launchableNodes){
+            launchableActivities.add(findName(node));
+        }
 	}
 
-	/**
-	 * Generates a full class name from a short class name by appending the
-	 * globally-defined package when necessary
-	 * 
-	 * @param className
-	 *            The class name to expand
-	 * @return The expanded class name for the given short name
-	 */
-	private String expandClassName(String className) {
-		String packageName = getPackageName();
-		if (className.startsWith("."))
-			return packageName + className;
-		else if (!className.contains("."))
-			return packageName + "." + className;
-		else
-			return className;
-	}
+	private String findName(AXmlNode node){
+        String className = null;
+	    AXmlAttribute<?> attr = node.getAttribute("name");
+        if (attr != null) {
+            className = expandClassName((String) attr.getValue(), packageName);
+        }
+        return className;
+    }
 
 	/**
 	 * Returns the handler which parsed and holds the manifest's data.
@@ -216,19 +233,19 @@ public class ProcessManifest {
 	/**
 	 * Returns a list containing all nodes with tag <code>provider</code>.
 	 * 
-	 * @return list with all providers
+	 * @return list with all providerNodes
 	 */
-	public ArrayList<AXmlNode> getProviders() {
-		return new ArrayList<AXmlNode>(this.providers);
+	public ArrayList<AXmlNode> getProviderNodes() {
+		return new ArrayList<AXmlNode>(this.providerNodes);
 	}
 
 	/**
 	 * Returns a list containing all nodes with tag <code>service</code>.
 	 * 
-	 * @return list with all services
+	 * @return list with all serviceNodes
 	 */
-	public ArrayList<AXmlNode> getServices() {
-		return new ArrayList<AXmlNode>(this.services);
+	public ArrayList<AXmlNode> getServiceNodes() {
+		return new ArrayList<AXmlNode>(this.serviceNodes);
 	}
 
 	/**
@@ -243,13 +260,13 @@ public class ProcessManifest {
 
 		// Collect the components
 		Set<String> entryPoints = new HashSet<String>();
-		for (AXmlNode node : this.activities)
+		for (AXmlNode node : this.activityNodes)
 			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.providers)
+		for (AXmlNode node : this.providerNodes)
 			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.services)
+		for (AXmlNode node : this.serviceNodes)
 			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.receivers)
+		for (AXmlNode node : this.receiverNodes)
 			checkAndAddComponent(entryPoints, node);
 
 		String appName = getApplicationName();
@@ -271,18 +288,23 @@ public class ProcessManifest {
 
 		// Collect the components
 		Set<String> actitityClasses = new HashSet<String>();
-		for (AXmlNode node : this.activities)
+		for (AXmlNode node : this.activityNodes)
 			checkAndAddComponent(actitityClasses, node);
 
 		return actitityClasses;
 	}
 
+	/**
+	 * Add all components
+	 * @param entryPoints The set of strings to add to
+	 * @param node the source AXmlNode
+	 */
 	private void checkAndAddComponent(Set<String> entryPoints, AXmlNode node) {
 		AXmlAttribute<?> attrEnabled = node.getAttribute("enabled");
 		if (attrEnabled == null || !attrEnabled.getValue().equals(Boolean.FALSE)) {
 			AXmlAttribute<?> attr = node.getAttribute("name");
 			if (attr != null) {
-				String className = expandClassName((String) attr.getValue());
+				String className = expandClassName((String) attr.getValue(), packageName);
 				if (!SystemClassHandler.isClassInSystemPackage(className))
 					entryPoints.add(className);
 			} else {
@@ -292,36 +314,13 @@ public class ProcessManifest {
 					if (a.getValue().getName().isEmpty() && a.getValue().getType() == AxmlVisitor.TYPE_STRING) {
 						String name = (String) a.getValue().getValue();
 						if (isValidComponentName(name)) {
-							String expandedName = expandClassName(name);
+							String expandedName = expandClassName(name, packageName);
 							if (!SystemClassHandler.isClassInSystemPackage(expandedName))
 								entryPoints.add(expandedName);
 						}
 					}
 			}
 		}
-	}
-
-	/**
-	 * Checks if the specified name is a valid Android component name
-	 * 
-	 * @param name
-	 *            The Android component name to check
-	 * @return True if the given name is a valid Android component name,
-	 *         otherwise false
-	 */
-	private boolean isValidComponentName(String name) {
-		if (name.isEmpty())
-			return false;
-		if (name.equals("true") || name.equals("false"))
-			return false;
-		if (Character.isDigit(name.charAt(0)))
-			return false;
-
-		if (name.startsWith("."))
-			return true;
-
-		// Be conservative
-		return false;
 	}
 
 	/**
@@ -333,16 +332,16 @@ public class ProcessManifest {
 	 *         registered as a component in the manifest file, otherwise null
 	 */
 	public ComponentType getComponentType(String className) {
-		for (AXmlNode node : this.activities)
+		for (AXmlNode node : this.activityNodes)
 			if (node.getAttribute("name").getValue().equals(className))
 				return ComponentType.Activity;
-		for (AXmlNode node : this.services)
+		for (AXmlNode node : this.serviceNodes)
 			if (node.getAttribute("name").getValue().equals(className))
 				return ComponentType.Service;
-		for (AXmlNode node : this.receivers)
+		for (AXmlNode node : this.receiverNodes)
 			if (node.getAttribute("name").getValue().equals(className))
 				return ComponentType.BroadcastReceiver;
-		for (AXmlNode node : this.providers)
+		for (AXmlNode node : this.providerNodes)
 			if (node.getAttribute("name").getValue().equals(className))
 				return ComponentType.ContentProvider;
 		return null;
@@ -351,19 +350,19 @@ public class ProcessManifest {
 	/**
 	 * Returns a list containing all nodes with tag <code>activity</code>.
 	 * 
-	 * @return list with all activities
+	 * @return list with all activityNodes
 	 */
-	public ArrayList<AXmlNode> getActivities() {
-		return new ArrayList<AXmlNode>(this.activities);
+	public ArrayList<AXmlNode> getActivityNodes() {
+		return new ArrayList<AXmlNode>(this.activityNodes);
 	}
 
 	/**
 	 * Returns a list containing all nodes with tag <code>receiver</code>.
 	 * 
-	 * @return list with all receivers
+	 * @return list with all receiverNodes
 	 */
-	public ArrayList<AXmlNode> getReceivers() {
-		return new ArrayList<AXmlNode>(this.receivers);
+	public ArrayList<AXmlNode> getReceiverNodes() {
+		return new ArrayList<AXmlNode>(this.receiverNodes);
 	}
 
 	/**
@@ -374,7 +373,7 @@ public class ProcessManifest {
 	 * @return provider with <code>name</code>
 	 */
 	public AXmlNode getProvider(String name) {
-		return this.getNodeWithName(this.providers, name);
+		return this.getNodeWithName(this.providerNodes, name);
 	}
 
 	/**
@@ -385,7 +384,7 @@ public class ProcessManifest {
 	 * @return service with <code>name</code>
 	 */
 	public AXmlNode getService(String name) {
-		return this.getNodeWithName(this.services, name);
+		return this.getNodeWithName(this.serviceNodes, name);
 	}
 
 	/**
@@ -396,7 +395,7 @@ public class ProcessManifest {
 	 * @return activitiy with <code>name</code>
 	 */
 	public AXmlNode getActivity(String name) {
-		return this.getNodeWithName(this.activities, name);
+		return this.getNodeWithName(this.activityNodes, name);
 	}
 
 	/**
@@ -407,7 +406,7 @@ public class ProcessManifest {
 	 * @return receiver with <code>name</code>
 	 */
 	public AXmlNode getReceiver(String name) {
-		return this.getNodeWithName(this.receivers, name);
+		return this.getNodeWithName(this.receiverNodes, name);
 	}
 
 	/**
@@ -447,16 +446,15 @@ public class ProcessManifest {
 	 * 
 	 * @return The package name of the application
 	 */
-	private String cache_PackageName = null;
-
-	public String getPackageName() {
-		if (cache_PackageName == null) {
-			AXmlAttribute<?> attr = this.manifest.getAttribute("package");
-			if (attr != null)
-				cache_PackageName = (String) attr.getValue();
-		}
-		return cache_PackageName;
+	private String getManifestPackageName() {
+        String packageName = null;
+	    AXmlAttribute<?> attr = this.manifest.getAttribute("package");
+        if (attr != null)
+            packageName = (String) attr.getValue();
+		return packageName;
 	}
+
+	public String getPackageName(){ return packageName; }
 
 	/**
 	 * Gets the version code of the application. This code is used to compare
@@ -486,7 +484,7 @@ public class ProcessManifest {
 	 */
 	public String getApplicationName() {
 		AXmlAttribute<?> attr = this.application.getAttribute("name");
-		return attr == null ? null : expandClassName((String) attr.getValue());
+		return attr == null ? null : expandClassName((String) attr.getValue(), packageName);
 	}
 
 	/**
@@ -565,6 +563,18 @@ public class ProcessManifest {
 		return permissions;
 	}
 
+	public ActivityWidgetTransitionGraph getAwtg(){
+	    return awtg;
+    }
+
+    public Set<String> getLaunchableActivities() {
+        return launchableActivities;
+    }
+
+    public void setLaunchableActivities(Set<String> launchableActivities) {
+        this.launchableActivities = launchableActivities;
+    }
+
 	/**
 	 * Adds a new permission to the manifest.
 	 * 
@@ -585,9 +595,9 @@ public class ProcessManifest {
 	 *            provider represented as an AXmlNode
 	 */
 	public void addProvider(AXmlNode node) {
-		if (providers.isEmpty())
-			providers = new ArrayList<AXmlNode>();
-		providers.add(node);
+		if (providerNodes.isEmpty())
+			providerNodes = new ArrayList<AXmlNode>();
+		providerNodes.add(node);
 	}
 
 	/**
@@ -597,9 +607,9 @@ public class ProcessManifest {
 	 *            receiver represented as an AXmlNode
 	 */
 	public void addReceiver(AXmlNode node) {
-		if (receivers.isEmpty())
-			receivers = new ArrayList<AXmlNode>();
-		receivers.add(node);
+		if (receiverNodes.isEmpty())
+			receiverNodes = new ArrayList<AXmlNode>();
+		receiverNodes.add(node);
 	}
 
 	/**
@@ -609,9 +619,9 @@ public class ProcessManifest {
 	 *            activity represented as an AXmlNode
 	 */
 	public void addActivity(AXmlNode node) {
-		if (activities.isEmpty())
-			activities = new ArrayList<AXmlNode>();
-		activities.add(node);
+		if (activityNodes.isEmpty())
+			activityNodes = new ArrayList<AXmlNode>();
+		activityNodes.add(node);
 	}
 
 	/**
@@ -621,9 +631,9 @@ public class ProcessManifest {
 	 *            service represented as an AXmlNode
 	 */
 	public void addService(AXmlNode node) {
-		if (services.isEmpty())
-			services = new ArrayList<AXmlNode>();
-		services.add(node);
+		if (serviceNodes.isEmpty())
+			serviceNodes = new ArrayList<AXmlNode>();
+		serviceNodes.add(node);
 	}
 
 	/**
@@ -640,10 +650,10 @@ public class ProcessManifest {
 	 * 
 	 * @return
 	 */
-	public Set<AXmlNode> getLaunchableActivities() {
+	public Set<AXmlNode> getLaunchableActivityNodes() {
 		Set<AXmlNode> allLaunchableActivities = new HashSet<AXmlNode>();
 
-		for (AXmlNode activity : activities) {
+		for (AXmlNode activity : activityNodes) {
 			for (AXmlNode activityChildren : activity.getChildren()) {
 				if (activityChildren.getTag().equals("intent-filter")) {
 					boolean actionFilter = false;
@@ -668,5 +678,4 @@ public class ProcessManifest {
 
 		return allLaunchableActivities;
 	}
-
 }

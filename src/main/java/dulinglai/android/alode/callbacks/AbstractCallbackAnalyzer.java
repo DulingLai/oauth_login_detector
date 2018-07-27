@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import dulinglai.android.alode.ResultWriter;
 import org.pmw.tinylog.Logger;
 import soot.AnySubType;
 import soot.Body;
@@ -96,21 +97,26 @@ public abstract class AbstractCallbackAnalyzer {
 
 	protected IValueProvider valueProvider = new SimpleConstantValueProvider();
 
-	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent)
+	// TODO remove this one once we are done with logging dynamic widgets
+	protected ResultWriter resultWriter;
+
+	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, ResultWriter resultWriter)
 			throws IOException {
-		this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent);
+		this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, resultWriter);
 	}
 
 	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			String callbackFile, int maxCallbacksPerComponent) throws IOException {
-		this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent);
+			String callbackFile, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
+		this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, resultWriter);
 	}
 
 	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			Set<String> androidCallbacks, int maxCallbacksPerComponent) throws IOException {
+			Set<String> androidCallbacks, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
 		this.entryPointClasses = entryPointClasses;
 		this.androidCallbacks = androidCallbacks;
 		this.maxCallbacksPerComponent = maxCallbacksPerComponent;
+		//TODO remove this if we are not writing results here
+		this.resultWriter = resultWriter;
 	}
 
 	/**
@@ -510,8 +516,8 @@ public abstract class AbstractCallbackAnalyzer {
 					|| curClass.getName().equals("android.support.v7.app.ActionBarActivity")
 					|| curClass.getName().equals("android.support.v7.app.AppCompatActivity"))
 				return true;
-			if (curClass.declaresMethod("void setContentView(int)"))
-				return false;
+//			if (curClass.declaresMethod("void setContentView(int)"))
+//				return false;
 			curClass = curClass.hasSuperclass() ? curClass.getSuperclass() : null;
 		}
 		return false;
@@ -542,6 +548,23 @@ public abstract class AbstractCallbackAnalyzer {
 			curClass = curClass.hasSuperclass() ? curClass.getSuperclass() : null;
 		}
 		return false;
+	}
+
+    /**
+     *  Find if the NewExpr is used to assign a new button
+     * @param type The Soot RefType of the NewExpr
+     * @return True if this NewExpr assigns a new button
+     */
+	protected boolean assignsNewWidget(RefType type) {
+        SootClass newClass = type.getSootClass();
+        while (newClass != null) {
+            if (newClass.getName().equals("android.widget.Button")
+                    || newClass.getName().equals("android.widget.ImageButton")
+                    || newClass.getName().equals("android.widget.EditText"))
+                return true;
+            newClass = newClass.hasSuperclass() ? newClass.getSuperclass() : null;
+        }
+        return false;
 	}
 
 	protected void analyzeMethodOverrideCallbacks(SootClass sootClass) {

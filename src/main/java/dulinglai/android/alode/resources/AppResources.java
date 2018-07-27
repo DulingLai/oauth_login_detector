@@ -10,14 +10,20 @@ import java.util.*;
 
 public class AppResources {
 
-    // App info that we care about (activities, widgets, stringList)
+    // App info that we care about (activityNodes, widgets, stringList)
     private String appName = null;
     private ARSCFileParser resources;
     private ProcessManifest manifest;
+
     private Set<String> activityClasses;
-    private List<ARSCFileParser.ResConfig> stringList;
-    private List<ARSCFileParser.ResConfig> resourceIdList;
+    private Map<Integer, String> stringResource = new HashMap<>();
+    private Map<Integer, String> resourceId = new HashMap<>();
+    private Map<Integer, String> layoutResource = new HashMap<>();
+
     private Set<String> entryPoints;
+
+    // App launchable activities (i.e. the start activity where we construct our graph)
+    private Set<String> launchableActivities;
 
     private final static String TAG = "AppParser";
 
@@ -32,27 +38,25 @@ public class AppResources {
     }
 
     private void parseAppResources(String targetApk) throws IOException, XmlPullParserException{
+        Logger.info("[{}] Parsing app resources (manifest and resource.arsc) ...", TAG);
+        long beforeARSC = System.nanoTime();
         this.manifest = new ProcessManifest(targetApk);
         this.appName = manifest.getPackageName();
         this.activityClasses = manifest.getAllActivityClasses();
         this.entryPoints = manifest.getEntryPointClasses();
 
-        // debug logging
-        Logger.info("[{}] Parsing manifest: {}", TAG, appName);
-        Logger.info("[{}] DONE: Found {} activity classes.", TAG, activityClasses.size());
-        for (String activity:activityClasses) {
-            Logger.debug("[{}] Found activity class: {}", TAG, activity);
-        }
+        // activities and services
+//        this.activities = manifest.getActivities();
+//        this.services = manifest.getServices();
+        this.launchableActivities = manifest.getLaunchableActivities();
 
         // parse the resources files
-        Logger.info("[{}] Parsing resources.arsc ...", TAG);
-        long beforeARSC = System.nanoTime();
         resources = new ARSCFileParser();
         resources.parse(targetApk);
         List<ARSCFileParser.ResPackage> resPackages = resources.getPackages();
         // parse string resources
         parseResources(resPackages);
-        Logger.info("[{}] DONE: ARSC file parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", TAG);
+        Logger.info("[{}] DONE: Resource parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", TAG);
     }
 
     /**
@@ -60,35 +64,37 @@ public class AppResources {
      * @param resPackages The resource packages that need to be parsed
      */
     private void parseResources(List<ARSCFileParser.ResPackage> resPackages) {
+//        List<String> excludeLang = new ArrayList<>(Arrays.asList("ar","ru","de","es","fr","it","in",
+//                "ja","ko","pt","zh","th","vi","tr","ca","da","fa","ka","pa","ta","nb","be","he","is",
+//                "ne","te","af","bg","fi","hi","si","kk","mk","sk","uk","el","gl","ml","nl","pl","ms",
+//                "sl","tl","am","km","bn","kn","mn","lo","ro","ro","sq","hr","mr","sr","ur","bs","cs",
+//                "et","lt","eu","gu","hu","zu","lv","sv","iw","sw","hy","ky","my","az","uz"));
+
         for (ARSCFileParser.ResPackage resPackage : resPackages) {
             for (ARSCFileParser.ResType resType : resPackage.getDeclaredTypes()) {
                 if (resType.getTypeName().equals("string")){
-                    stringList = resType.getConfigurations();
-                    // remove String files of other languages (this is because the getLanguage does not return the current english version but its variant instead
-                    for (Iterator<ARSCFileParser.ResConfig> iter = stringList.listIterator(); iter.hasNext();){
-                        ARSCFileParser.ResConfig string = iter.next();
-                        List<String> excludeLang = new ArrayList<>(Arrays.asList("ar","ru","de","es","fr","it","in","ja","ko","pt","zh","th","vi","tr"));
-                        if (excludeLang.contains(string.getConfig().getLanguage())){
-                            iter.remove();
+                    // only keep English Strings
+                    for (ARSCFileParser.ResConfig string : resType.getConfigurations()){
+                        if(string.getConfig().getLanguage().equals("\u0000\u0000")){
+                            for (ARSCFileParser.AbstractResource resource : string.getResources()){
+                                if (resource instanceof ARSCFileParser.StringResource){
+                                    stringResource.put(resource.getResourceID(), ((ARSCFileParser.StringResource) resource).getValue());
+                                }
+                            }
                         }
                     }
-
-                    for (ARSCFileParser.ResConfig string : stringList) {
-                        Logger.debug("Remaining languages: {} with {} entries",string.getConfig().getLanguage(),string.getResources().size());
-//                        for (ARSCFileParser.AbstractResource resource : resConfig.getResources()){
-//                            if (resource instanceof ARSCFileParser.StringResource){
-//                                Logger.debug("{} : {}", resource.getResourceID(), ((ARSCFileParser.StringResource) resource).getValue());
-//                            }
-//                        }
+                } else if (resType.getTypeName().equals("id")){
+                    for (ARSCFileParser.ResConfig resIdConfig : resType.getConfigurations()){
+                        for (ARSCFileParser.AbstractResource resource : resIdConfig.getResources()){
+                            resourceId.put(resource.getResourceID(), resource.getResourceName());
+                        }
                     }
-                }else if (resType.getTypeName().equals("id")){
-                    resourceIdList = resType.getConfigurations();
-//                    for (ARSCFileParser.ResConfig resourceId : resourceIdList) {
-//                        Logger.debug("Remaining resource id: {} with {} entries",resourceId.getConfig().getLanguage(),resourceId.getResources().size());
-//                        for (ARSCFileParser.AbstractResource resource : resourceId.getResources()){
-//                            Logger.debug("{} : {}", resource.getResourceID(), resource.getResourceName());
-//                        }
-//                    }
+                } else if (resType.getTypeName().equals("layout")){
+                    for (ARSCFileParser.ResConfig resLayoutConfig : resType.getConfigurations()){
+                        for (ARSCFileParser.AbstractResource resource : resLayoutConfig.getResources()){
+                            layoutResource.put(resource.getResourceID(), resource.getResourceName());
+                        }
+                    }
                 }
             }
         }
@@ -129,14 +135,22 @@ public class AppResources {
     }
 
     /**
-     * Gets the string resources of this ARSC file instance
-     * @return The string resources of this ARSC file instance
+     * Gets the string resources by resource ID
+     * @return The string resources of given resource ID
      */
-    public List<ARSCFileParser.ResConfig> getStringList(){ return stringList; }
+    public String getStringResourceById(int id){ return stringResource.get(id); }
 
     /**
      * Gets the resources id list of this ARSC file instance
      * @return The resources id list of this ARSC file instance
      */
-    public List<ARSCFileParser.ResConfig> getResourceIdList(){ return resourceIdList; }
+    public String getResourceNameById(int id){ return resourceId.get(id); }
+
+    public Set<String> getLaunchableActivities() {
+        return launchableActivities;
+    }
+
+    public void setLaunchableActivities(Set<String> launchableActivities) {
+        this.launchableActivities = launchableActivities;
+    }
 }

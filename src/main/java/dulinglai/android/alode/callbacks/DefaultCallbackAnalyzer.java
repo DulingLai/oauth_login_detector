@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import dulinglai.android.alode.ResultWriter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.ISolverTerminationReason;
 import org.pmw.tinylog.Logger;
@@ -29,6 +30,7 @@ import dulinglai.android.alode.callbacks.filters.ICallbackFilter;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointUtils;
 import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import soot.util.Chain;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
 import soot.util.queue.QueueReader;
@@ -37,7 +39,7 @@ import soot.util.queue.QueueReader;
  * Default implementation of the callback analyzer class. This implementation
  * aims for precision. It tries to rule out callbacks registered in unreachable
  * code. The mapping between components and callbacks is as precise as possible.
- * 
+ *
  * @author Steven Arzt
  *
  */
@@ -48,19 +50,21 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 	private Set<IMemoryBoundedSolverStatusNotification> notificationListeners = new HashSet<>();
 	private ISolverTerminationReason isKilled = null;
 
-	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent)
+	//TODO remove result writer
+
+	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, ResultWriter resultWriter)
 			throws IOException {
-		super(entryPointClasses, maxCallbacksPerComponent);
+		super(entryPointClasses, maxCallbacksPerComponent, resultWriter);
 	}
 
 	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			String callbackFile, int maxCallbacksPerComponent) throws IOException {
-		super(entryPointClasses, callbackFile, maxCallbacksPerComponent);
+			String callbackFile, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
+		super(entryPointClasses, callbackFile, maxCallbacksPerComponent, resultWriter);
 	}
 
 	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			Set<String> androidCallbacks, int maxCallbacksPerComponent) throws IOException {
-		super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent);
+			Set<String> androidCallbacks, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
+		super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, resultWriter);
 	}
 
 	/**
@@ -148,7 +152,7 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 
 	/**
 	 * Gets all lifecycle methods in the given entry point class
-	 * 
+	 *
 	 * @param sc
 	 *            The class in which to look for lifecycle methods
 	 * @return The set of lifecycle methods in the given class
@@ -184,7 +188,7 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 	 * subsignatures. For each subsignature, it checks whether the given class or
 	 * one of its superclass overwrites the respective methods. All findings are
 	 * collected in a set and returned.
-	 * 
+	 *
 	 * @param sc
 	 *            The class in which to look for lifecycle method implementations
 	 * @param methods
@@ -248,7 +252,6 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 	 * Finds the mappings between classes and their respective layout files
 	 */
 	private void findClassLayoutMappings() {
-		SootClass mainclass = Scene.v().getMainClass();
 		Iterator<SootClass> classIterator = Scene.v().getApplicationClasses().iterator();
 		Iterator<MethodOrMethodContext> rmIterator = Scene.v().getReachableMethods().listener();
 		while (rmIterator.hasNext()) {
@@ -258,28 +261,34 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 			if (SystemClassHandler.isClassInSystemPackage(sm.getDeclaringClass().getName()))
 				continue;
 
-			for (Unit u : sm.retrieveActiveBody().getUnits())
-				if (u instanceof Stmt) {
-					Stmt stmt = (Stmt) u;
-					if (stmt.containsInvokeExpr()) {
-						InvokeExpr inv = stmt.getInvokeExpr();
-						if (invokesSetContentView(inv) || invokesInflate(inv)) { // check
-																					// also
-																					// for
-																					// inflate
-																					// to
-																					// look
-																					// for
-																					// the
-																					// fragments
-							for (Value val : inv.getArgs()) {
-								Integer intValue = valueProvider.getValue(sm, stmt, val, Integer.class);
-								if (intValue != null)
-									this.layoutClasses.put(sm.getDeclaringClass(), intValue);
-							}
-						}
-					}
-				}
+            // Here we try to prevent the multi-catch bug from happening
+            try{
+                Chain<Unit> units = sm.retrieveActiveBody().getUnits();
+                for (Unit u : units)
+                    if (u instanceof Stmt) {
+                        Stmt stmt = (Stmt) u;
+                        if (stmt.containsInvokeExpr()) {
+                            InvokeExpr inv = stmt.getInvokeExpr();
+                            if (invokesSetContentView(inv) || invokesInflate(inv)) { // check
+                                // also
+                                // for
+                                // inflate
+                                // to
+                                // look
+                                // for
+                                // the
+                                // fragments
+                                for (Value val : inv.getArgs()) {
+                                    Integer intValue = valueProvider.getValue(sm, stmt, val, Integer.class);
+                                    if (intValue != null)
+                                        this.layoutClasses.put(sm.getDeclaringClass(), intValue);
+                                }
+                            }
+                        }
+                    }
+            } catch (RuntimeException e){
+                Logger.warn(e.getMessage());
+            }
 		}
 	}
 

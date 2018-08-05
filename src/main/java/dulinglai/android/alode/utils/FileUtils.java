@@ -6,6 +6,7 @@ import org.apache.commons.configuration.PropertiesConfiguration;
 import org.pmw.tinylog.Logger;
 
 import java.io.*;
+import java.nio.file.Files;
 
 public class FileUtils {
     // print the debug info to a text file
@@ -29,6 +30,18 @@ public class FileUtils {
     public static boolean validateFile(String filePath) {
         File f = new File(filePath);
         return f.exists();
+    }
+
+    public static void deleteDir(File file) {
+        File[] contents = file.listFiles();
+        if (contents != null) {
+            for (File f : contents) {
+                if (! Files.isSymbolicLink(f.toPath())) {
+                    deleteDir(f);
+                }
+            }
+        }
+        file.delete();
     }
 
     public static void loadConfigFile(String configFilePath, GlobalConfigs config){

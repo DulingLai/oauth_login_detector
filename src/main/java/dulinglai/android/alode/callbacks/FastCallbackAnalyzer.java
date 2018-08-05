@@ -1,10 +1,9 @@
 package dulinglai.android.alode.callbacks;
 
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Set;
 
-import dulinglai.android.alode.ResultWriter;
+import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.*;
@@ -18,19 +17,19 @@ import soot.util.Chain;
  */
 public class FastCallbackAnalyzer extends AbstractCallbackAnalyzer {
 
-	public FastCallbackAnalyzer(Set<SootClass> entryPointClasses, ResultWriter resultWriter)
+	public FastCallbackAnalyzer(Set<SootClass> entryPointClasses, Set<String> activityList)
 			throws IOException {
-		super(entryPointClasses, 0, resultWriter);
+		super(entryPointClasses, 0, activityList);
 	}
 
 	public FastCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			String callbackFile, ResultWriter resultWriter) throws IOException {
-		super(entryPointClasses, callbackFile, 0, resultWriter);
+			String callbackFile, Set<String> activityList) throws IOException {
+		super(entryPointClasses, callbackFile, 0, activityList);
 	}
 
 	public FastCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			Set<String> androidCallbacks, ResultWriter resultWriter) throws IOException {
-		super(entryPointClasses, androidCallbacks, 0, resultWriter);
+			Set<String> androidCallbacks, Set<String> activityList) throws IOException {
+		super(entryPointClasses, androidCallbacks, 0, activityList);
 	}
 
 	@Override
@@ -61,13 +60,16 @@ public class FastCallbackAnalyzer extends AbstractCallbackAnalyzer {
 	 * Finds the mappings between classes and their respective layout files
 	 */
 	private void findClassLayoutMappings() {
-        // Here we log the instance
-        StringBuilder resultStringBuilder = new StringBuilder();
+        Boolean isActivityClass = false;
 		for (SootClass sc : Scene.v().getApplicationClasses()) {
-		    if (sc.getName().contains("InitialLaunchActivity"))
-		        Logger.debug("here");
 
 		    if (sc.isConcrete()) {
+                // Do not start the search in system classes
+                if (SystemClassHandler.isClassInSystemPackage(sc.getName()))
+                    continue;
+
+                isActivityClass = checkActivityClass(sc.getName());
+
 				for (SootMethod sm : sc.getMethods()) {
 					if (!sm.isConcrete())
 						continue;
@@ -87,16 +89,19 @@ public class FastCallbackAnalyzer extends AbstractCallbackAnalyzer {
                                             if (intValue != null)
                                                 this.layoutClasses.put(sm.getDeclaringClass(), intValue);
                                         }
-                                    }
+                                    } else if (isActivityClass && invokesFindViewById(inv)){
+                                        for (Value val : inv.getArgs()){
+                                            Integer intValue = valueProvider.getValue(sm, stmt, val, Integer.class);
+                                            if (intValue != null)
+
+                                        }
+									}
                                 } else if (stmt instanceof AssignStmt){
                                     Value rightOp = ((AssignStmt) stmt).getRightOp();
                                     if (rightOp instanceof NewExpr){
                                         if (assignsNewWidget(((NewExpr) rightOp).getBaseType())){
                                             // TODO replace the logger with something else to capture the dynamic widgets
-                                            resultStringBuilder.append(sc.getName());
-                                            resultStringBuilder.append("    ");
-                                            resultStringBuilder.append(((NewExpr) rightOp).getBaseType().getSootClass().getName());
-                                            resultStringBuilder.append(" , ");
+
                                         }
                                     }
                                 }
@@ -108,11 +113,11 @@ public class FastCallbackAnalyzer extends AbstractCallbackAnalyzer {
 				}
 			}
 		}
-        try {
-            resultWriter.appendStringToResultFile("DynamicWidgets.csv", resultStringBuilder.toString());
-        } catch (IOException e){
-            e.printStackTrace();
-        }
+//        try {
+//            resultWriter.appendStringToResultFile("DynamicWidgets.csv", resultStringBuilder.toString());
+//        } catch (IOException e){
+//            e.printStackTrace();
+//        }
 	}
 
     @Override

@@ -1,9 +1,7 @@
 package dulinglai.android.alode;
 
 import dulinglai.android.alode.config.GlobalConfigs;
-import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.utils.FileUtils;
-import dulinglai.android.alode.resources.AppResources;
 import org.apache.commons.cli.*;
 import org.pmw.tinylog.Configurator;
 import org.pmw.tinylog.Level;

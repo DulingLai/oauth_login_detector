@@ -24,7 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import dulinglai.android.alode.ResultWriter;
+import dulinglai.android.alode.graph.ActivityNode;
+import dulinglai.android.alode.graph.WidgetNode;
 import org.pmw.tinylog.Logger;
 import soot.AnySubType;
 import soot.Body;
@@ -97,26 +98,25 @@ public abstract class AbstractCallbackAnalyzer {
 
 	protected IValueProvider valueProvider = new SimpleConstantValueProvider();
 
-	// TODO remove this one once we are done with logging dynamic widgets
-	protected ResultWriter resultWriter;
+	protected Set<String> activityList;
+	protected Map<ActivityNode, Set<WidgetNode>> ownershipEdges;
 
-	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, ResultWriter resultWriter)
+	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList)
 			throws IOException {
-		this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, resultWriter);
+		this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList);
 	}
 
 	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			String callbackFile, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
-		this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, resultWriter);
+			String callbackFile, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
+		this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList);
 	}
 
 	public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			Set<String> androidCallbacks, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
+			Set<String> androidCallbacks, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
 		this.entryPointClasses = entryPointClasses;
 		this.androidCallbacks = androidCallbacks;
 		this.maxCallbacksPerComponent = maxCallbacksPerComponent;
-		//TODO remove this if we are not writing results here
-		this.resultWriter = resultWriter;
+		this.activityList = activityList;
 	}
 
 	/**
@@ -530,7 +530,7 @@ public abstract class AbstractCallbackAnalyzer {
 	 *            The invocaton to check
 	 * @return True if this invocation calls inflate, otherwise false
 	 */
-	protected boolean invokesInflate(InvokeExpr inv) {
+	boolean invokesInflate(InvokeExpr inv) {
 		String methodName = SootMethodRepresentationParser.v()
 				.getMethodNameFromSubSignature(inv.getMethodRef().getSubSignature().getString());
 		if (!methodName.equals("inflate"))
@@ -548,6 +548,25 @@ public abstract class AbstractCallbackAnalyzer {
 			curClass = curClass.hasSuperclass() ? curClass.getSuperclass() : null;
 		}
 		return false;
+	}
+
+	/**
+	 * Checks whether this invocation calls Android's findViewById method
+	 * @param inv The invocaton to check
+	 * @return True if this invocation calls findViewById, otherwise false
+	 */
+	boolean invokesFindViewById(InvokeExpr inv) {
+		String methodName = SootMethodRepresentationParser.v()
+				.getMethodNameFromSubSignature(inv.getMethodRef().getSubSignature().getString());
+
+		if (inv.getMethod().getDeclaringClass().getName().equalsIgnoreCase("android.view.View") &&
+		methodName.equalsIgnoreCase("findViewById")) return true;
+
+		return false;
+	}
+
+	boolean checkActivityClass(String className) {
+		return activityList.contains(className);
 	}
 
     /**

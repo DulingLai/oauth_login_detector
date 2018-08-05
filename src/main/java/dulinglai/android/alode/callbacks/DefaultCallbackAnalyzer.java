@@ -52,19 +52,19 @@ public class DefaultCallbackAnalyzer extends AbstractCallbackAnalyzer implements
 
 	//TODO remove result writer
 
-	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, ResultWriter resultWriter)
+	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList)
 			throws IOException {
-		super(entryPointClasses, maxCallbacksPerComponent, resultWriter);
+		super(entryPointClasses, maxCallbacksPerComponent, activityList);
 	}
 
 	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			String callbackFile, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
-		super(entryPointClasses, callbackFile, maxCallbacksPerComponent, resultWriter);
+			String callbackFile, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
+		super(entryPointClasses, callbackFile, maxCallbacksPerComponent, activityList);
 	}
 
 	public DefaultCallbackAnalyzer(Set<SootClass> entryPointClasses,
-			Set<String> androidCallbacks, int maxCallbacksPerComponent, ResultWriter resultWriter) throws IOException {
-		super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, resultWriter);
+			Set<String> androidCallbacks, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
+		super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, activityList);
 	}
 
 	/**

@@ -12,6 +12,8 @@ import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointCreator;
 import dulinglai.android.alode.graph.ActivityWidgetTransitionGraph;
+import dulinglai.android.alode.ic3.Ic3Analysis;
+import dulinglai.android.alode.ic3.Ic3Config;
 import dulinglai.android.alode.iccta.IccInstrumenter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.MemoryWatcher;
@@ -45,6 +47,8 @@ public class SetupApplication {
     private Set<String> entryPointString = null;
     private MultiMap<SootClass, SootClass> fragmentClasses = new HashMultiMap<>();
 
+    private SootMethod dummyMainMethod;
+
     // Callbacks
     private MultiMap<SootClass, CallbackDefinition> callbackMethods = new HashMultiMap<>();
     private GlobalConfigs.CallbackAnalyzer callbackAnalyzerType;
@@ -55,6 +59,10 @@ public class SetupApplication {
     // widgets
     private MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
     private MultiMap<SootClass, CallbackDefinition> uicallbacks = new HashMultiMap<>();
+
+    // Activity and widgets map
+    private Set<String> activityList;
+    private Map<SootClass, Set<Integer>> ownershipEdges = new HashMap<>();
 
     // Activity Widget Graph
     private ActivityWidgetTransitionGraph awtg;
@@ -78,6 +86,7 @@ public class SetupApplication {
         this.apkPath = config.getInputApkPath();
         this.androidJar = config.getAndroidJarPath();
         this.outputDir = config.getOutputPath();
+        this.activityList = appResources.getActivityClasses();
 
         // Setup result writer
         this.resultWriter = new ResultWriter(this.packageName, this.outputDir);
@@ -123,16 +132,18 @@ public class SetupApplication {
                 ex.printStackTrace();
             }
         }
+
+//        runIC3();
     }
 
-//    public void runIC3(){
-//        // read configuration
-//        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
-//
-//        // run analysis
-//        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints);
-//        ic3Analysis.performAnalysis(ic3Config);
-//    }
+    public void runIC3(){
+        // read configuration
+        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
+
+        // run analysis
+        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints,dummyMainMethod,androidJar);
+        ic3Analysis.performAnalysis(ic3Config);
+    }
 
 
     // TODO: current method values performance over precision, check if we need more precise approach
@@ -374,7 +385,7 @@ public class SetupApplication {
         Set<SootClass> entryPointClasses = getComponentsToAnalyze(component);
 
         // Collect the callback interfaces implemented in the app's source code
-        AbstractCallbackAnalyzer callbackAnalyzer = new FastCallbackAnalyzer(entryPointClasses, resultWriter);
+        AbstractCallbackAnalyzer callbackAnalyzer = new FastCallbackAnalyzer(entryPointClasses, activityList);
         callbackAnalyzer.collectCallbackMethods();
 
         // Collect the results
@@ -403,6 +414,9 @@ public class SetupApplication {
         }
         for (String layoutKey : layoutFileParser.getUserControls().keySet()){
             Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
+            // TODO add widgets and ownership edges here
+
+
         }
     }
 
@@ -436,7 +450,7 @@ public class SetupApplication {
 
     private void createMainMethod(SootClass component){
         entryPointCreator = createEntryPointCreator(component);
-        SootMethod dummyMainMethod = entryPointCreator.createDummyMain();
+        dummyMainMethod = entryPointCreator.createDummyMain();
         Scene.v().setEntryPoints(Collections.singletonList(dummyMainMethod));
         if (!dummyMainMethod.getDeclaringClass().isInScene())
             Scene.v().addClass(dummyMainMethod.getDeclaringClass());

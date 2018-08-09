@@ -71,9 +71,6 @@ public class SetupApplication {
     private IccInstrumenter iccInstrumenter = null;
     private String iccModel = null;
 
-    // results
-    private ResultWriter resultWriter;
-
 
     public SetupApplication(GlobalConfigs config) {
         // Setup Soot for analysis
@@ -87,9 +84,6 @@ public class SetupApplication {
         this.androidJar = config.getAndroidJarPath();
         this.outputDir = config.getOutputPath();
         this.activityList = appResources.getActivityClasses();
-
-        // Setup result writer
-        this.resultWriter = new ResultWriter(this.packageName, this.outputDir);
 
         // Setup analysis config
         this.callbackAnalyzerType = config.getCallbackAnalyzer();
@@ -198,7 +192,7 @@ public class SetupApplication {
         // source code. Note that the filters should know all components to
         // filter out callbacks even if the respective component is only
         // analyzed later.
-        AbstractCallbackAnalyzer callbackAnalyzer = new DefaultCallbackAnalyzer(entryPointClasses, maxCallbacksPerComponent, resultWriter);
+        AbstractCallbackAnalyzer callbackAnalyzer = new DefaultCallbackAnalyzer(entryPointClasses, maxCallbacksPerComponent, activityList);
 
         callbackAnalyzer.addCallbackFilter(new AlienHostComponentFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new ApplicationCallbackFilter(entrypoints));
@@ -398,10 +392,10 @@ public class SetupApplication {
         // Collect the XML-based callback methods
         collectXmlBasedCallbackMethods(layoutFileParser, callbackAnalyzer);
 
-        // Construct the final callgraph
+        // Construct the final call-graph
         resetCallgraph();
         createMainMethod(component);
-        constructCallgraphInternal();
+//        constructCallgraphInternal();
 
         // get the layout class maps
         layoutClasses = callbackAnalyzer.getLayoutClasses();

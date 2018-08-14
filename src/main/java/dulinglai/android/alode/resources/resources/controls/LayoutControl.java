@@ -1,7 +1,5 @@
 package dulinglai.android.alode.resources.resources.controls;
 
-import dulinglai.android.alode.sourcesink.SourceSinkDefinition;
-
 /**
  * Abstract base class for all layout controls
  * 
@@ -20,13 +18,5 @@ public abstract class LayoutControl {
 	public boolean isSensitive() {
 		return false;
 	}
-
-	/**
-	 * If this control shall be treated as a source, this method is called to obtain
-	 * the precise definition of the source
-	 * 
-	 * @return The source definition for this layout control
-	 */
-	public abstract SourceSinkDefinition getSourceDefinition();
 
 }

@@ -1,9 +1,9 @@
 package dulinglai.android.alode;
 
-import dulinglai.android.alode.callbacks.AbstractCallbackAnalyzer;
+import dulinglai.android.alode.callbacks.AbstractWidgetAnalyzer;
 import dulinglai.android.alode.callbacks.CallbackDefinition;
-import dulinglai.android.alode.callbacks.DefaultCallbackAnalyzer;
-import dulinglai.android.alode.callbacks.FastCallbackAnalyzer;
+import dulinglai.android.alode.callbacks.DefaultWidgetAnalyzer;
+import dulinglai.android.alode.callbacks.FastWidgetAnalyzer;
 import dulinglai.android.alode.callbacks.filters.AlienFragmentFilter;
 import dulinglai.android.alode.callbacks.filters.AlienHostComponentFilter;
 import dulinglai.android.alode.callbacks.filters.ApplicationCallbackFilter;
@@ -11,20 +11,21 @@ import dulinglai.android.alode.callbacks.filters.UnreachableConstructorFilter;
 import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointCreator;
-import dulinglai.android.alode.graph.ActivityWidgetTransitionGraph;
-import dulinglai.android.alode.ic3.Ic3Analysis;
-import dulinglai.android.alode.ic3.Ic3Config;
+import dulinglai.android.alode.graphBuilder.*;
 import dulinglai.android.alode.iccta.IccInstrumenter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.MemoryWatcher;
 import dulinglai.android.alode.memory.TimeoutWatcher;
-import dulinglai.android.alode.resources.AppResources;
+import dulinglai.android.alode.resources.manifest.ProcessManifest;
 import dulinglai.android.alode.resources.resources.ARSCFileParser;
 import dulinglai.android.alode.resources.resources.LayoutFileParser;
 import dulinglai.android.alode.resources.resources.controls.AndroidLayoutControl;
+import dulinglai.android.alode.resources.resources.controls.EditTextControl;
+import dulinglai.android.alode.resources.resources.controls.GenericLayoutControl;
 import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
 import heros.solver.Pair;
 import org.pmw.tinylog.Logger;
+import org.xmlpull.v1.XmlPullParserException;
 import soot.*;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
@@ -33,18 +34,24 @@ import java.io.IOException;
 import java.util.*;
 
 public class SetupApplication {
+    // Logging tags
+    private static final String RESOURCE_PARSER = "ResourceParser";
 
-    // An instance that holds the app's resources references
-    private AppResources appResources;
-    private String packageName;
     private String apkPath;
     private String androidJar;
     private String outputDir;
 
+    // Resources
+    private ProcessManifest manifest;
+    private ARSCFileParser resources;
+    private Map<Integer, String> stringResource = new HashMap<>();
+    private Map<Integer, String> resourceId = new HashMap<>();
+    private Map<String, Integer> layoutResource = new HashMap<>();
+
     // Entry points related
     private AndroidEntryPointCreator entryPointCreator = null;
-    private Set<SootClass> entrypoints = null;
-    private Set<String> entryPointString = null;
+    private Set<SootClass> entrypoints;
+    private Set<String> entryPointString;
     private MultiMap<SootClass, SootClass> fragmentClasses = new HashMultiMap<>();
 
     private SootMethod dummyMainMethod;
@@ -61,8 +68,12 @@ public class SetupApplication {
     private MultiMap<SootClass, CallbackDefinition> uicallbacks = new HashMultiMap<>();
 
     // Activity and widgets map
-    private Set<String> activityList;
-    private Map<SootClass, Set<Integer>> ownershipEdges = new HashMap<>();
+    private Set<ActivityNode> activityNodeSet;
+    private Set<ServiceNode> serviceNodeSet;
+    private Set<EditWidgetNode> editWidgetNodeSet;
+    private Set<ClickWidgetNode> clickWidgetNodeSet;
+    private Map<SootClass, Set<AbstractWidgetNode>> ownershipEdgesClasses = new HashMap<>();
+    private Map<ActivityNode, Set<AbstractWidgetNode>> ownershipEdges = new HashMap<>();
 
     // Activity Widget Graph
     private ActivityWidgetTransitionGraph awtg;
@@ -73,84 +84,224 @@ public class SetupApplication {
 
 
     public SetupApplication(GlobalConfigs config) {
-        // Setup Soot for analysis
-        SootSettings sootSettings = new SootSettings(config);
-        sootSettings.initializeSoot();
-
-        // Setup app resources
-        this.appResources = new AppResources(config.getInputApkPath());
-        this.packageName = appResources.getAppName();
+        // Setup analysis config
         this.apkPath = config.getInputApkPath();
         this.androidJar = config.getAndroidJarPath();
         this.outputDir = config.getOutputPath();
-        this.activityList = appResources.getActivityClasses();
-
-        // Setup analysis config
         this.callbackAnalyzerType = config.getCallbackAnalyzer();
         this.maxCallbacksPerComponent = config.getMaxCallbacksPerComponent();
         this.maxTimeout = config.getMaxTimeout();
         this.maxCallbackAnalysisDepth = config.getMaxCallbackAnalysisDepth();
 
-        // Create the initial entry point - launchable activities
-        entryPointString = appResources.getLaunchableActivities();
-        entrypoints = new HashSet<>(entryPointString.size());
-        for (String className : entryPointString){
-            SootClass sc = Scene.v().getSootClassUnsafe(className);
-            if (sc != null)
-                entrypoints.add(sc);
-        }
-        // Check if the entry points have been successfully created
-        if (entrypoints == null || entrypoints.isEmpty()) {
-            Logger.error("No entry points");
-            entryPointString = appResources.getManifest().getEntryPointClasses();
-            entrypoints = new HashSet<>(entryPointString.size());
-            for (String className : entryPointString){
-                SootClass sc = Scene.v().getSootClassUnsafe(className);
-                if (sc != null)
-                    entrypoints.add(sc);
-            }
+        // Setup Soot for analysis
+        SootSettings sootSettings = new SootSettings(config);
+        sootSettings.initializeSoot();
+
+        // Parse app manifest - collect exported activities and services
+        Logger.info("[{}] Parsing app resources (manifest and resource.arsc) ...", RESOURCE_PARSER);
+        long beforeARSC = System.nanoTime();
+        try {
+            parseManifest(config.getInputApkPath());
+        } catch (IOException|XmlPullParserException e) {
+            Logger.error("[ERROR] Failed to parse the manifest!");
         }
 
-        // AWTG
-        this.awtg = appResources.getManifest().getAwtg();
+        // Parse Resources - collect resource ids
+        resources = new ARSCFileParser();
+        try {
+            resources.parse(apkPath);
+        } catch (IOException e) {
+            Logger.error("[ERROR] Failed to parse the resource files");
+        }
+        List<ARSCFileParser.ResPackage> resPackages = resources.getPackages();
+        parseResources(resPackages);
+        Logger.info("[{}] DONE: Resource parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", RESOURCE_PARSER);
     }
 
     public void runAnalysis(){
+        // Parse layout files
+        LayoutFileParser layoutFileParser = new LayoutFileParser(manifest.getPackageName(), resources);
+        layoutFileParser.parseLayoutFileDirect(apkPath);
+
+        // Parse Jimple files to collect widgets properties
         // We process one launchable activity as entry point at once
         for (SootClass component : entrypoints) {
-            // Calculate the callback methods (we also get the class <-> layout mapping here
             try {
-                calculateCallbacks(component);
+                collectGraphNodes(component, layoutFileParser);
             } catch (IOException ex) {
                 Logger.error(ex.getMessage());
                 ex.printStackTrace();
             }
         }
 
+        // Builder the AWTG graph
+        buildAWTG(layoutFileParser.getUserControls());
+
+        // Debug logging
+        for (ActivityNode activityNode : ownershipEdges.keySet()) {
+            Logger.debug("Activity: {}", activityNode.getName());
+            Set<AbstractWidgetNode> widgetNodeSet = ownershipEdges.get(activityNode);
+            for (AbstractWidgetNode widgetNode : widgetNodeSet) {
+                if (widgetNode instanceof EditWidgetNode) {
+                    EditWidgetNode widget = (EditWidgetNode) widgetNode;
+                    Logger.debug("[EditTextWidget] - resId: {}, text: {}, content: {}, hint: {}, input type: {}",
+                            widget.getResourceId(), widget.getText(),
+                            widget.getContentDescription(), widget.getHint(), widget.getInputType());
+                } else {
+                    ClickWidgetNode widget = (ClickWidgetNode) widgetNode;
+                    Logger.debug("[ClickWidget] - resId: {}, text: {}, click listener: {}",
+                            widget.getResourceId(), widget.getText(), widget.getInputType());
+                }
+            }
+        }
+
+//        for (SootClass layoutClass : layoutClasses.keySet()){
+//            Logger.debug("[LayoutClass] {} -> {}", layoutClass, layoutClasses.get(layoutClass));
+//            if (awtg.getActivityByName(layoutClass.getName())!=null) {
+//                awtg.getActivityByName(layoutClass.getName()).setResourceId(layoutClasses.get(layoutClass).iterator().next());
+//            }
+//        }
+//        for (String layoutKey : layoutFileParser.getUserControls().keySet()){
+//            Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
+//        }
 //        runIC3();
     }
 
-    public void runIC3(){
-        // read configuration
-        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
+    private void buildAWTG(MultiMap<String, AndroidLayoutControl> userControls) {
+        // Add resource id to activity nodes
+        Set<ActivityNode> toRemove = new HashSet<>();
+        Set<ActivityNode> toAdd = new HashSet<>();
+        for (SootClass layoutClass : layoutClasses.keySet()) {
+            for (ActivityNode activityNode : activityNodeSet) {
+                if (activityNode.getName().equals(layoutClass.getName())) {
+                    toRemove.add(activityNode);
+                    activityNode.setResourceId(layoutClasses.get(layoutClass).iterator().next());
+                    toAdd.add(activityNode);
 
-        // run analysis
-        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints,dummyMainMethod,androidJar);
-        ic3Analysis.performAnalysis(ic3Config);
+                    Set<AbstractWidgetNode> widgetNodeSet = ownershipEdgesClasses.get(layoutClass);
+                    if (widgetNodeSet!=null && !widgetNodeSet.isEmpty()) {
+                        ownershipEdges.put(activityNode, widgetNodeSet);
+                    }
+                }
+            }
+        }
+        activityNodeSet.removeAll(toRemove);
+        activityNodeSet.addAll(toAdd);
+
+        // collectXmlWidgets
+        collectXmlWidgets(userControls);
     }
 
+    /**
+     * Collect the widgets from xml files
+     * @param userControls The user controls found from xml files.
+     *                     We are only interested in EditText widgets and Clickable widgets
+     */
+    private void collectXmlWidgets(MultiMap<String, AndroidLayoutControl> userControls) {
 
-    // TODO: current method values performance over precision, check if we need more precise approach
-    private void calculateCallbacks(SootClass component) throws IOException {
-        LayoutFileParser layoutFileParser = new LayoutFileParser(packageName, appResources.getResources());
+        for (String layoutKeyFull : userControls.keySet()){
+            String layoutKey = layoutKeyFull.substring(layoutKeyFull.lastIndexOf('/') + 1, layoutKeyFull.lastIndexOf('.'));
+            Integer resId = layoutResource.get(layoutKey);
+            if (resId != null) {
+                for (ActivityNode activityNode : activityNodeSet) {
+                    if (activityNode.getResourceId() == resId) {
+                        Set<AbstractWidgetNode> newWidgetNodeSet = createWidgetNodeForUserControls(userControls.get(layoutKeyFull));
+                        ownershipEdges.put(activityNode, newWidgetNodeSet);
+                    }
+                }
+            } else
+                Logger.warn("[GraphBuilder] Cannot find the resource id for {}", layoutKeyFull);
+        }
+    }
 
+    private Set<AbstractWidgetNode> createWidgetNodeForUserControls(Set<AndroidLayoutControl> androidLayoutControls) {
+        Set<AbstractWidgetNode> newWidgetSet = new HashSet<>();
+        for (AndroidLayoutControl usercontrol : androidLayoutControls) {
+            if (usercontrol instanceof EditTextControl) {
+                newWidgetSet.add(createEditTextForUserControl((EditTextControl)usercontrol));
+            } else {
+                if (usercontrol.getClickListener() != null)
+                    newWidgetSet.add(createClickWidgetForUserControl((GenericLayoutControl)usercontrol, ClickWidgetNode.EventType.Click));
+                else {
+                    for (ClickWidgetNode clickWidgetNode : clickWidgetNodeSet) {
+                        if (clickWidgetNode.getResourceId() == usercontrol.getID()) {
+                            newWidgetSet.add(createClickWidgetForUserControl((GenericLayoutControl) usercontrol,
+                                    clickWidgetNode.getInputType()));
+                        }
+                    }
+                }
+            }
+        }
+
+        return newWidgetSet;
+    }
+
+    /**
+     * Creates edit text widget out of given user control
+     * @param usercontrol The user control
+     * @return The edit text widget created
+     */
+    private EditWidgetNode createEditTextForUserControl(EditTextControl usercontrol) {
+        int resId = usercontrol.getID();
+        int inputType = usercontrol.getInputType();
+
+        String text = checkStringResource(usercontrol.getText());
+        String contentDescription = checkStringResource(usercontrol.getContentDescription());
+        String hint = checkStringResource(usercontrol.getHint());
+
+        return new EditWidgetNode(resId,text,contentDescription,hint,inputType);
+    }
+
+    /**
+     * Creates click widget out of given user control
+     * @param usercontrol The user control
+     * @return The click widget created
+     */
+    private ClickWidgetNode createClickWidgetForUserControl(GenericLayoutControl usercontrol, ClickWidgetNode.EventType eventType) {
+        int resId = usercontrol.getID();
+        String text = checkStringResource(usercontrol.getText());
+
+        return new ClickWidgetNode(resId, text, eventType);
+    }
+
+    /**
+     * Checks the string resources if the given string is a resource id
+     * @param text The string to check
+     * @return The string found in string resource if the given string is a resource id,
+     * else returns the original string
+     */
+    private String checkStringResource(String text) {
+        if (text != null) {
+            if (text.matches("-?\\d+")) {
+                int resId = Integer.parseInt(text);
+                String newText = stringResource.get(resId);
+                if (newText != null)
+                    return newText;
+                else
+                    return text;
+            } else
+                return text;
+        } else
+            return null;
+    }
+
+//    public void runIC3(){
+//        // read configuration
+//        Ic3Config ic3Config = new Ic3Config(apkPath, packageName, androidJar, outputDir, entryPointString);
+//
+//        // run analysis
+//        Ic3Analysis ic3Analysis = new Ic3Analysis(ic3Config,callbackMethods,entrypoints,dummyMainMethod,androidJar);
+//        ic3Analysis.performAnalysis(ic3Config);
+//    }
+
+    private void collectGraphNodes(SootClass component, LayoutFileParser layoutFileParser) throws IOException {
         // Choose between fast callback analyzer or default callback analyzer
         switch (callbackAnalyzerType){
             case Fast:
-                calculateCallbackMethodsFast(layoutFileParser, component);
+                collectGraphNodesFast(layoutFileParser, component);
                 break;
             case Default:
-                calculateCallbackMethods(layoutFileParser, component);
+                collectGraphNodesDefault(layoutFileParser, component);
                 break;
             default:
                 throw new RuntimeException("Unknown callback analyzer");
@@ -177,7 +328,7 @@ public class SetupApplication {
      * @throws IOException
      *             Thrown if a required configuration cannot be read
      */
-    private void calculateCallbackMethods(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
+    private void collectGraphNodesDefault(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
         // cleanup the callgraph
         resetCallgraph();
 
@@ -192,12 +343,13 @@ public class SetupApplication {
         // source code. Note that the filters should know all components to
         // filter out callbacks even if the respective component is only
         // analyzed later.
-        AbstractCallbackAnalyzer callbackAnalyzer = new DefaultCallbackAnalyzer(entryPointClasses, maxCallbacksPerComponent, activityList);
+        AbstractWidgetAnalyzer callbackAnalyzer = new DefaultWidgetAnalyzer(entryPointClasses,
+                maxCallbacksPerComponent, manifest.getAllActivityClasses(), layoutFileParser);
 
         callbackAnalyzer.addCallbackFilter(new AlienHostComponentFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new ApplicationCallbackFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new UnreachableConstructorFilter());
-        callbackAnalyzer.collectCallbackMethods();
+        callbackAnalyzer.collectWidgets();
 
         // Find the user-defined sources in the layout XML files.
         layoutFileParser.parseLayoutFile(apkPath);
@@ -336,16 +488,6 @@ public class SetupApplication {
 
         // get the layout class maps
         layoutClasses = callbackAnalyzer.getLayoutClasses();
-        // Debug logging
-        Logger.debug("[LayoutClass] print lay out classes: ");
-        for (SootClass layoutClass : layoutClasses.keySet()){
-            Logger.debug("[LayoutClass] {} -> {}", layoutClass, layoutClasses.get(layoutClass));
-        }
-        Logger.debug("[UserControl] print user controls: ");
-        for (String layoutKey : layoutFileParser.getUserControls().keySet()){
-            Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
-        }
-
 
         // Warn the user if we had to abort the callback analysis early
         boolean abortedEarly = false;
@@ -369,7 +511,7 @@ public class SetupApplication {
      * @throws IOException
      *             Thrown if a required configuration cannot be read
      */
-    private void calculateCallbackMethodsFast(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
+    private void collectGraphNodesFast(LayoutFileParser layoutFileParser, SootClass component) throws IOException {
         // Construct new callgraph
         resetCallgraph();
         createMainMethod(component);
@@ -379,55 +521,83 @@ public class SetupApplication {
         Set<SootClass> entryPointClasses = getComponentsToAnalyze(component);
 
         // Collect the callback interfaces implemented in the app's source code
-        AbstractCallbackAnalyzer callbackAnalyzer = new FastCallbackAnalyzer(entryPointClasses, activityList);
-        callbackAnalyzer.collectCallbackMethods();
+        AbstractWidgetAnalyzer callbackAnalyzer = new FastWidgetAnalyzer(entryPointClasses,
+                manifest.getAllActivityClasses(), layoutFileParser);
+        callbackAnalyzer.collectWidgets();
+
+        // Get the layout class maps
+        layoutClasses = callbackAnalyzer.getLayoutClasses();
+
+        // Get the nodes set collected from Jimple files
+        this.editWidgetNodeSet = callbackAnalyzer.getEditTextWidgetSet();
+        this.clickWidgetNodeSet = callbackAnalyzer.getClickWidgetNodeSet();
+        this.ownershipEdgesClasses = callbackAnalyzer.getOwnershipEdges();
 
         // Collect the results
         this.callbackMethods.putAll(callbackAnalyzer.getCallbackMethods());
         this.entrypoints.addAll(callbackAnalyzer.getDynamicManifestComponents());
-
-        // Find the user-defined sources in the layout XML files.
-        layoutFileParser.parseLayoutFileDirect(apkPath);
-
-        // Collect the XML-based callback methods
-        collectXmlBasedCallbackMethods(layoutFileParser, callbackAnalyzer);
-
-        // Construct the final call-graph
-        resetCallgraph();
-        createMainMethod(component);
-//        constructCallgraphInternal();
-
-        // get the layout class maps
-        layoutClasses = callbackAnalyzer.getLayoutClasses();
-        // Debug logging
-        for (SootClass layoutClass : layoutClasses.keySet()){
-            Logger.debug("[LayoutClass] {} -> {}", layoutClass, layoutClasses.get(layoutClass));
-            if (awtg.getActivityByName(layoutClass.getName())!=null) {
-                awtg.getActivityByName(layoutClass.getName()).setResourceId(layoutClasses.get(layoutClass).iterator().next());
-            }
-        }
-        for (String layoutKey : layoutFileParser.getUserControls().keySet()){
-            Logger.debug("[UserControl] {} -> {}", layoutKey, layoutFileParser.getUserControls().get(layoutKey));
-            // TODO add widgets and ownership edges here
-
-
-        }
     }
 
-    private void createEntrypoints() {
-        //TODO Check if we need all those entry points (the original code models all activity, serviceNodes, providerNodes and receiverNodes)
-        // Create entry points
-        entryPointString = appResources.getEntryPoints();
+    /**
+     * Parse the apk manifest file for entry point classes and exported activities and services
+     * @param targetApk The target apk file to parse
+     * @throws IOException
+     * @throws XmlPullParserException
+     */
+    private void parseManifest(String targetApk) throws IOException, XmlPullParserException {
+        this.manifest = new ProcessManifest(targetApk);
+        this.entryPointString = manifest.getLaunchableActivities();
+
         entrypoints = new HashSet<>(entryPointString.size());
         for (String className : entryPointString){
             SootClass sc = Scene.v().getSootClassUnsafe(className);
             if (sc != null)
                 entrypoints.add(sc);
         }
-        // Check if the entry points have been successfully created
-        if (entrypoints == null || entrypoints.isEmpty()) {
-            Logger.error("No entry points");
-            System.exit(1);
+
+        // Gets the activities and services nodes from manifest
+        this.activityNodeSet = manifest.getActivityNodeSet();
+        this.serviceNodeSet = manifest.getServiceNodeSet();
+    }
+
+    /**
+     * Parse the string resources ("en" only) and other resource ids of the resource packages
+     * @param resPackages The resource packages that need to be parsed
+     */
+    private void parseResources(List<ARSCFileParser.ResPackage> resPackages) {
+//        List<String> excludeLang = new ArrayList<>(Arrays.asList("ar","ru","de","es","fr","it","in",
+//                "ja","ko","pt","zh","th","vi","tr","ca","da","fa","ka","pa","ta","nb","be","he","is",
+//                "ne","te","af","bg","fi","hi","si","kk","mk","sk","uk","el","gl","ml","nl","pl","ms",
+//                "sl","tl","am","km","bn","kn","mn","lo","ro","ro","sq","hr","mr","sr","ur","bs","cs",
+//                "et","lt","eu","gu","hu","zu","lv","sv","iw","sw","hy","ky","my","az","uz"));
+
+        for (ARSCFileParser.ResPackage resPackage : resPackages) {
+            for (ARSCFileParser.ResType resType : resPackage.getDeclaredTypes()) {
+                if (resType.getTypeName().equals("string")){
+                    // only keep English Strings
+                    for (ARSCFileParser.ResConfig string : resType.getConfigurations()){
+                        if(string.getConfig().getLanguage().equals("\u0000\u0000")){
+                            for (ARSCFileParser.AbstractResource resource : string.getResources()){
+                                if (resource instanceof ARSCFileParser.StringResource){
+                                    stringResource.put(resource.getResourceID(), ((ARSCFileParser.StringResource) resource).getValue());
+                                }
+                            }
+                        }
+                    }
+                } else if (resType.getTypeName().equals("id")) {
+                    for (ARSCFileParser.ResConfig resIdConfig : resType.getConfigurations()){
+                        for (ARSCFileParser.AbstractResource resource : resIdConfig.getResources()){
+                            resourceId.put(resource.getResourceID(), resource.getResourceName());
+                        }
+                    }
+                } else if (resType.getTypeName().equals("layout")) {
+                    for (ARSCFileParser.ResConfig resLayoutConfig : resType.getConfigurations()){
+                        for (ARSCFileParser.AbstractResource resource : resLayoutConfig.getResources()){
+                            layoutResource.put(resource.getResourceName(), resource.getResourceID());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -466,7 +636,7 @@ public class SetupApplication {
         // If we we already have an entry point creator, we make sure to clean up our
         // leftovers from previous runs
         if (entryPointCreator == null)
-            entryPointCreator = new AndroidEntryPointCreator(appResources.getManifest(), components);
+            entryPointCreator = new AndroidEntryPointCreator(manifest, components);
         else {
             entryPointCreator.removeGeneratedMethods(false);
             entryPointCreator.reset();
@@ -529,7 +699,7 @@ public class SetupApplication {
      * @return True if at least one new callback method has been added, otherwise
      *         false
      */
-    private boolean collectXmlBasedCallbackMethods(LayoutFileParser lfp, AbstractCallbackAnalyzer jimpleClass) {
+    private boolean collectXmlBasedCallbackMethods(LayoutFileParser lfp, AbstractWidgetAnalyzer jimpleClass) {
         SootMethod smViewOnClick = Scene.v()
                 .grabMethod("<android.view.View$OnClickListener: void onClick(android.view.View)>");
 
@@ -541,7 +711,7 @@ public class SetupApplication {
 
             Set<Integer> classIds = jimpleClass.getLayoutClasses().get(callbackClass);
             for (Integer classId : classIds) {
-                ARSCFileParser.AbstractResource resource = appResources.getResources().findResource(classId);
+                ARSCFileParser.AbstractResource resource = resources.findResource(classId);
                 if (resource instanceof ARSCFileParser.StringResource) {
                     final String layoutFileName = ((ARSCFileParser.StringResource) resource).getValue();
 
@@ -666,12 +836,11 @@ public class SetupApplication {
             return this.entrypoints;
         else {
             // We always analyze the application class together with each
-            // component
-            // as there might be interactions between the two
+            // component as there might be interactions between the two
             Set<SootClass> components = new HashSet<>(2);
             components.add(component);
 
-            String applicationName = this.appResources.getManifest().getApplicationName();
+            String applicationName = this.manifest.getApplicationName();
             if (applicationName != null && !applicationName.isEmpty())
                 components.add(Scene.v().getSootClassUnsafe(applicationName));
             return components;

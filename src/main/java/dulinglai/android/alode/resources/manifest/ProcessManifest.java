@@ -1,5 +1,15 @@
 package dulinglai.android.alode.resources.manifest;
 
+import dulinglai.android.alode.graphBuilder.ActivityNode;
+import dulinglai.android.alode.graphBuilder.ServiceNode;
+import dulinglai.android.alode.resources.axml.AXmlAttribute;
+import dulinglai.android.alode.resources.axml.AXmlHandler;
+import dulinglai.android.alode.resources.axml.AXmlNode;
+import dulinglai.android.alode.resources.axml.ApkHandler;
+import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import org.xmlpull.v1.XmlPullParserException;
+import pxb.android.axml.AxmlVisitor;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -7,20 +17,8 @@ import java.io.InputStream;
 import java.util.*;
 import java.util.Map.Entry;
 
-import dulinglai.android.alode.graph.ActivityNode;
-import dulinglai.android.alode.graph.ActivityWidgetTransitionGraph;
-import dulinglai.android.alode.graph.ServiceNode;
-import org.xmlpull.v1.XmlPullParserException;
-import pxb.android.axml.AxmlVisitor;
-
-import dulinglai.android.alode.resources.axml.AXmlAttribute;
-import dulinglai.android.alode.resources.axml.AXmlHandler;
-import dulinglai.android.alode.resources.axml.AXmlNode;
-import dulinglai.android.alode.resources.axml.ApkHandler;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
-
-import static dulinglai.android.alode.graph.NodeUtils.expandClassName;
-import static dulinglai.android.alode.graph.NodeUtils.isValidComponentName;
+import static dulinglai.android.alode.graphBuilder.NodeUtils.expandClassName;
+import static dulinglai.android.alode.graphBuilder.NodeUtils.isValidComponentName;
 
 /**
  * This class provides easy access to all data of an AppManifest.<br />
@@ -64,7 +62,8 @@ public class ProcessManifest {
 	private List<AXmlNode> activityNodes = null;
 	private List<AXmlNode> receiverNodes = null;
 
-    private ActivityWidgetTransitionGraph awtg;
+    private Set<ActivityNode> activityNodeSet = new HashSet<>();
+    private Set<ServiceNode> serviceNodeSet = new HashSet<>();
     private Set<String> launchableActivities = new HashSet<>();
 
 	/**
@@ -135,10 +134,8 @@ public class ProcessManifest {
 	 *            InputStream for an AppManifest.
 	 * @throws IOException
 	 *             if an I/O error occurs.
-	 * @throws XmlPullParserException
-	 *             can occur due to a malformed manifest.
-	 */
-	protected void handle(InputStream manifestIS) throws IOException, XmlPullParserException {
+     */
+	protected void handle(InputStream manifestIS) throws IOException {
 		this.axml = new AXmlHandler(manifestIS);
 
 		// get manifest node
@@ -166,15 +163,12 @@ public class ProcessManifest {
 		this.receiverNodes = this.axml.getNodesWithTag("receiver");
 
 		// Process activityNodes and serviceNodes
-        Set<ActivityNode> activities = new HashSet<>();
-        Set<ServiceNode> services = new HashSet<>();
         for (AXmlNode activityNode : activityNodes){
-            activities.add(new ActivityNode(activityNode, packageName));
+            activityNodeSet.add(new ActivityNode(activityNode, packageName));
         }
         for (AXmlNode serviceNode : serviceNodes){
-            services.add(new ServiceNode(serviceNode, packageName));
+            serviceNodeSet.add(new ServiceNode(serviceNode, packageName));
         }
-        awtg = new ActivityWidgetTransitionGraph(activities, services);
 
         // launchable activities
         Set<AXmlNode> launchableNodes = getLaunchableActivityNodes();
@@ -563,10 +557,25 @@ public class ProcessManifest {
 		return permissions;
 	}
 
-	public ActivityWidgetTransitionGraph getAwtg(){
-	    return awtg;
+    /**
+     * Gets the activity node set for AWTG
+     * @return The activity node set for AWTG
+     */
+	public Set<ActivityNode> getActivityNodeSet(){
+	    return activityNodeSet;
     }
 
+    /**
+     * Gets the service node set for AWTG
+     * @return The service node set for AWTG
+     */
+    public Set<ServiceNode> getServiceNodeSet(){
+        return serviceNodeSet;
+    }
+    /**
+     * Gets the launchable activities from Manifest
+     * @return The launchable activities from Manifest
+     */
     public Set<String> getLaunchableActivities() {
         return launchableActivities;
     }

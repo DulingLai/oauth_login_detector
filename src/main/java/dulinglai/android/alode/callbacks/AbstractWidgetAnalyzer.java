@@ -1,56 +1,30 @@
 package dulinglai.android.alode.callbacks;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import dulinglai.android.alode.graph.ActivityNode;
-import dulinglai.android.alode.graph.ClickWidgetNode;
-import dulinglai.android.alode.graph.EditWidgetNode;
-import org.pmw.tinylog.Logger;
-import soot.AnySubType;
-import soot.Body;
-import soot.FastHierarchy;
-import soot.Local;
-import soot.PointsToSet;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.SootMethodRef;
-import soot.Type;
-import soot.Unit;
-import soot.Value;
-import soot.jimple.IdentityStmt;
-import soot.jimple.InstanceInvokeExpr;
-import soot.jimple.InvokeExpr;
-import soot.jimple.ReturnVoidStmt;
-import soot.jimple.Stmt;
 import dulinglai.android.alode.callbacks.CallbackDefinition.CallbackType;
 import dulinglai.android.alode.callbacks.filters.ICallbackFilter;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
-import dulinglai.android.alode.utils.sootUtils.ResourceUtils;
 import dulinglai.android.alode.entryPointCreators.SimulatedCodeElementTag;
-import dulinglai.android.alode.utils.sootUtils.SootMethodRepresentationParser;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import dulinglai.android.alode.graphBuilder.AbstractWidgetNode;
+import dulinglai.android.alode.graphBuilder.ClickWidgetNode;
+import dulinglai.android.alode.graphBuilder.EditWidgetNode;
+import dulinglai.android.alode.resources.resources.LayoutFileParser;
 import dulinglai.android.alode.sootData.values.IValueProvider;
 import dulinglai.android.alode.sootData.values.SimpleConstantValueProvider;
+import dulinglai.android.alode.utils.sootUtils.ResourceUtils;
+import dulinglai.android.alode.utils.sootUtils.SootMethodRepresentationParser;
+import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import org.pmw.tinylog.Logger;
+import soot.*;
+import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.Edge;
-import soot.util.Chain;
+import soot.toolkits.scalar.UnitValueBoxPair;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
 
-public abstract class AbstractCallbackAnalyzer {
+import java.io.*;
+import java.util.*;
+
+public abstract class AbstractWidgetAnalyzer {
 
     private static final String SIG_CAR_CREATE = "<android.car.Car: android.car.Car createCar(android.content.Context,android.content.ServiceConnection)>";
 
@@ -73,7 +47,6 @@ public abstract class AbstractCallbackAnalyzer {
     protected final int maxCallbacksPerComponent;
 
     protected final MultiMap<SootClass, CallbackDefinition> callbackMethods = new HashMultiMap<>();
-    protected final MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
     protected final Set<SootClass> dynamicManifestComponents = new HashSet<>();
     protected final MultiMap<SootClass, SootClass> fragmentClasses = new HashMultiMap<>();
     protected final Map<SootClass, Integer> fragmentIDs = new HashMap<>();
@@ -83,28 +56,37 @@ public abstract class AbstractCallbackAnalyzer {
 
     protected IValueProvider valueProvider = new SimpleConstantValueProvider();
 
-    protected Set<SootMethod> findViewMethod = new HashSet<>();
     protected Set<String> activityList;
+    LayoutFileParser layoutFileParser;
+
+    protected final MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
+    protected Set<SootMethod> findViewMethod = new HashSet<>();
     protected Map<SootClass, SootClass> baseActivityMapping = new HashMap<>();
-    protected Set<EditWidgetNode> widgetNodeSet;
-    protected Map<ActivityNode, Set<ClickWidgetNode>> ownershipEdges;
+    protected Set<SootClass> nestedActivitySet = new HashSet<>();
 
-    public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList)
-            throws IOException {
-        this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList);
+    protected Set<EditWidgetNode> editTextWidgetSet;
+    protected Set<ClickWidgetNode> clickWidgetNodeSet;
+    protected Map<SootClass, Set<AbstractWidgetNode>> ownershipEdges;
+
+    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList
+            , LayoutFileParser layoutFileParser) throws IOException {
+        this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList, layoutFileParser);
     }
 
-    public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-                                    String callbackFile, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
-        this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList);
+    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses,
+                                  String callbackFile, int maxCallbacksPerComponent,
+                                  Set<String> activityList, LayoutFileParser layoutFileParser) throws IOException {
+        this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList, layoutFileParser);
     }
 
-    public AbstractCallbackAnalyzer(Set<SootClass> entryPointClasses,
-                                    Set<String> androidCallbacks, int maxCallbacksPerComponent, Set<String> activityList) throws IOException {
+    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses,
+                                  Set<String> androidCallbacks, int maxCallbacksPerComponent,
+                                  Set<String> activityList, LayoutFileParser layoutFileParser) {
         this.entryPointClasses = entryPointClasses;
         this.androidCallbacks = androidCallbacks;
         this.maxCallbacksPerComponent = maxCallbacksPerComponent;
         this.activityList = activityList;
+        this.layoutFileParser = layoutFileParser;
     }
 
     /**
@@ -156,7 +138,7 @@ public abstract class AbstractCallbackAnalyzer {
      * Collects the callback methods for all Android default handlers implemented in
      * the source code.
      */
-    public void collectCallbackMethods() {
+    public void collectWidgets() {
         // Initialize the filters
         for (ICallbackFilter filter : callbackFilters)
             filter.reset();
@@ -179,7 +161,7 @@ public abstract class AbstractCallbackAnalyzer {
             return;
 
         // Iterate over all statement and find callback registration methods
-        Set<SootClass> callbackClasses = new HashSet<SootClass>();
+        Set<SootClass> callbackClasses = new HashSet<>();
         for (Unit u : method.retrieveActiveBody().getUnits()) {
             Stmt stmt = (Stmt) u;
             // Callback registrations are always instance invoke expressions
@@ -225,7 +207,7 @@ public abstract class AbstractCallbackAnalyzer {
                             // If we don't have pointsTo information, we take
                             // the type of the local
                             if (possibleTypes.isEmpty()) {
-                                Type argType = ((Local) arg).getType();
+                                Type argType = arg.getType();
                                 RefType baseType;
                                 if (argType instanceof RefType)
                                     baseType = (RefType) argType;
@@ -504,8 +486,6 @@ public abstract class AbstractCallbackAnalyzer {
                     || curClass.getName().equals("android.support.v7.app.ActionBarActivity")
                     || curClass.getName().equals("android.support.v7.app.AppCompatActivity"))
                 return true;
-//			if (curClass.declaresMethod("void setContentView(int)"))
-//				return false;
             curClass = curClass.hasSuperclass() ? curClass.getSuperclass() : null;
         }
         return false;
@@ -554,14 +534,14 @@ public abstract class AbstractCallbackAnalyzer {
         if (!findViewMethod.isEmpty()) {
             for (SootMethod fvMethod : findViewMethod) {
                 if (returnType.equalsIgnoreCase("android.view.View") &&
-                        inv.getMethod().equals(fvMethod)) return true;
+                        inv.getMethod().getName().equals(fvMethod.getName())) return true;
             }
         }
 
         return false;
     }
 
-    boolean checkActivityClass(String className) {
+    boolean isExportedActivityClass(String className) {
         return activityList.contains(className);
     }
 
@@ -571,14 +551,25 @@ public abstract class AbstractCallbackAnalyzer {
      * @return True if this NewExpr assigns a new button
      */
     protected boolean assignsNewWidget(SootClass newClass) {
-        while (newClass != null) {
-            if (newClass.getName().substring(0,14).equals("android.widget"))
-                return true;
-            newClass = newClass.hasSuperclass() ? newClass.getSuperclass() : null;
+        try {
+            while (newClass != null) {
+                if (newClass.getName().length()>=14) {
+                    if (newClass.getName().substring(0, 14).equals("android.widget"))
+                        return true;
+                }
+                newClass = newClass.hasSuperclass() ? newClass.getSuperclass() : null;
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            return false;
         }
         return false;
     }
 
+    /**
+     * Checks if the SootClass is an EditText class
+     * @param newClass The soot class to check
+     * @return True if it is an EditText class
+     */
     protected boolean isEditTextWidget(SootClass newClass) {
         while (newClass != null) {
             if (newClass.getName().equals("android.widget.EditText"))
@@ -588,36 +579,144 @@ public abstract class AbstractCallbackAnalyzer {
         return false;
     }
 
-    protected void collectEditTextAttr(Chain<Unit> units, Value leftOp) {
+    /**
+     * Check if the value is reassigned to another local
+     * @param usePair The use pair to check for reassignment
+     */
+    protected Unit reassignsLocal(List<UnitValueBoxPair> usePair){
+        for (UnitValueBoxPair anUsePair : usePair) {
+            Unit useUnit = anUsePair.getUnit();
+
+            if (useUnit instanceof Stmt) {
+                Stmt newStmt = (Stmt) useUnit;
+                if (newStmt instanceof AssignStmt) {
+                    Value newRightOp = ((AssignStmt) newStmt).getRightOp();
+                    Value newLeftOp = ((AssignStmt) newStmt).getLeftOp();
+
+                    if (newRightOp instanceof CastExpr) {
+                        return useUnit;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Creates edit text widgets
+     * @param usePair The use pair used for def-use analysis
+     * @param leftOp The local variable
+     * @return
+     */
+    EditWidgetNode createNewEditTextWidget(List<UnitValueBoxPair> usePair, Value leftOp) {
+        return createNewEditTextWidget(usePair, leftOp, -1);
+    }
+
+    /**
+     * Creates edit text widgets
+     * @param usePair The use pair used for def-use analysis
+     * @param leftOp The local variable
+     * @return
+     */
+    EditWidgetNode createNewEditTextWidget(List<UnitValueBoxPair> usePair, Value leftOp, int resourceId) {
+        int resId = resourceId;
         String text = "";
         String contentDescription = "";
         String hint = "";
-        String inputType = "";
+        int inputType = -1;
 
-        // Collect other info about this widget
-        for (Unit newUnit : units) {
-            if (newUnit instanceof Stmt) {
-                Stmt newStmt = (Stmt) newUnit;
+        for (UnitValueBoxPair anUsePair : usePair) {
+            Unit useUnit = anUsePair.getUnit();
+
+            if (useUnit instanceof Stmt) {
+                Stmt newStmt = (Stmt) useUnit;
+
                 if (newStmt.containsInvokeExpr()) {
                     InvokeExpr inv = newStmt.getInvokeExpr();
                     if (inv instanceof InstanceInvokeExpr) {
                         if (((InstanceInvokeExpr) inv).getBase().equals(leftOp)) {
                             SootMethod sootMethod = inv.getMethod();
+                            Value arg = inv.getArg(0);
                             // Collect setInputType
                             if (sootMethod.getName().equals("setInputType"))
-                                inputType = inv.getArg(0).toString();
+                                inputType = Integer.parseInt(arg.toString());
 
                             // Collect setHint
-                            if (sootMethod.getName().equals("setHint") || sootMethod.getName().equals("setHintText")){
-                                Type paramType = sootMethod.getParameterType(0);
+                            if (sootMethod.getName().equals("setHint") || sootMethod.getName().equals("setHintText")) {
+                                hint = arg.toString();
                             }
+
+                            // Collect text
+                            if (sootMethod.getName().equals("setText"))
+                                text = arg.toString();
+
+                            // Collect Content Description
+                            if (sootMethod.getName().equals("setContentDescription"))
+                                contentDescription = arg.toString();
                         }
                     }
                 }
             }
         }
+        return new EditWidgetNode(resId,text,contentDescription,hint,inputType);
     }
 
+    /**
+     * Creates clickable widgets
+     * @param usePair The use pair used for def-use analysis
+     * @param leftOp The local variable
+     * @return
+     */
+    ClickWidgetNode createNewClickWidget(List<UnitValueBoxPair> usePair, Value leftOp) {
+        return createNewClickWidget(usePair,leftOp,-1);
+    }
+
+    /**
+     * Creates clickable widgets
+     * @param usePair The use pair used for def-use analysis
+     * @param leftOp The local variable
+     * @return
+     */
+    ClickWidgetNode createNewClickWidget(List<UnitValueBoxPair> usePair, Value leftOp, int resourceId) {
+        int resId = resourceId;
+        String text = "";
+        ClickWidgetNode.EventType eventType = ClickWidgetNode.EventType.None;
+
+        for (UnitValueBoxPair anUsePair : usePair) {
+            Unit useUnit = anUsePair.getUnit();
+
+            if (useUnit instanceof Stmt) {
+                Stmt newStmt = (Stmt) useUnit;
+                if (newStmt.containsInvokeExpr()) {
+                    InvokeExpr inv = newStmt.getInvokeExpr();
+                    if (inv instanceof InstanceInvokeExpr) {
+                        if (((InstanceInvokeExpr) inv).getBase().equals(leftOp)) {
+                            SootMethod sootMethod = inv.getMethod();
+                            // Collect clickable methods
+                            if (sootMethod.getName().equals("setClickable")
+                                    || sootMethod.getName().equals("setOnClickListener"))
+                                eventType = ClickWidgetNode.EventType.Click;
+                            if (sootMethod.getName().equals("setContextClickable")
+                                    || sootMethod.getName().equals("setOnContextClickListener")
+                                    || sootMethod.getName().equals("setOnCreateContextMenuListener"))
+                                eventType = ClickWidgetNode.EventType.ContextClick;
+                            if (sootMethod.getName().equals("setLongClickable")
+                                    || sootMethod.getName().equals("setOnLongClickListener"))
+                                eventType = ClickWidgetNode.EventType.LongClick;
+                            if (sootMethod.getName().equals("setOnTouchListener"))
+                                eventType = ClickWidgetNode.EventType.Touch;
+                            if (sootMethod.getName().equals("setOnKeyListener"))
+                                eventType = ClickWidgetNode.EventType.Key;
+                        }
+                    }
+                }
+            }
+        }
+        if (eventType == ClickWidgetNode.EventType.None)
+            return null;
+        else
+            return new ClickWidgetNode(resId,text,eventType);
+    }
 
     protected void analyzeMethodOverrideCallbacks(SootClass sootClass) {
         if (!sootClass.isConcrete())
@@ -765,6 +864,8 @@ public abstract class AbstractCallbackAnalyzer {
         return true;
     }
 
+
+
     private Set<SootClass> collectAllInterfaces(SootClass sootClass) {
         Set<SootClass> interfaces = new HashSet<SootClass>(sootClass.getInterfaces());
         for (SootClass i : sootClass.getInterfaces())
@@ -832,4 +933,27 @@ public abstract class AbstractCallbackAnalyzer {
         this.valueProvider = valueProvider;
     }
 
+    /**
+     * Gets the EditText widgets set collected from the Jimple files
+     * @return The EditText widgets set collected from the Jimple files
+     */
+    public Set<EditWidgetNode> getEditTextWidgetSet() {
+        return editTextWidgetSet;
+    }
+
+    /**
+     * Gets the clickable widgets set collected from the Jimple files
+     * @return The clickable widgets set collected from the Jimple files
+     */
+    public Set<ClickWidgetNode> getClickWidgetNodeSet() {
+        return clickWidgetNodeSet;
+    }
+
+    /**
+     * Gets the ownership edges set collected from the Jimple files
+     * @return The ownership edges set collected from the Jimple files
+     */
+    public Map<SootClass, Set<AbstractWidgetNode>> getOwnershipEdges() {
+        return ownershipEdges;
+    }
 }

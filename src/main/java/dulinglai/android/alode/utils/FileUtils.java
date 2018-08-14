@@ -5,8 +5,12 @@ import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.pmw.tinylog.Logger;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Map;
 
 public class FileUtils {
     // print the debug info to a text file
@@ -99,5 +103,22 @@ public class FileUtils {
         } catch (ConfigurationException ex){
             Logger.error(ex.getMessage());
         }
+    }
+
+    /**
+     * Gets the key by value in a one-to-one map
+     * @param map The map to iterate
+     * @param value The value to look for
+     * @param <T> Any type key
+     * @param <E> Any type entry
+     * @return The corresponding key
+     */
+    public static <T, E> T getKeyByValue(Map<T, E> map, E value) {
+        for (Map.Entry<T, E> entry : map.entrySet()) {
+            if (value.equals(entry.getValue())) {
+                return entry.getKey();
+            }
+        }
+        return null;
     }
 }

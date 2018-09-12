@@ -1,4 +1,12 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
+
+import com.google.protobuf.TextFormat;
+import dulinglai.android.alode.iccparser.Ic3Data.Application;
+import dulinglai.android.alode.iccparser.Ic3Data.Application.Component.ExitPoint;
+import dulinglai.android.alode.iccparser.Ic3Data.Application.Component.Instruction;
+import dulinglai.android.alode.iccparser.Ic3Data.Attribute;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -7,16 +15,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.protobuf.TextFormat;
-
-import dulinglai.android.alode.iccta.Ic3Data.Application;
-import dulinglai.android.alode.iccta.Ic3Data.Application.Component.ExitPoint;
-import dulinglai.android.alode.iccta.Ic3Data.Application.Component.Instruction;
-import dulinglai.android.alode.iccta.Ic3Data.Attribute;
 
 public class Ic3ResultLoader {
 
@@ -39,7 +37,7 @@ public class Ic3ResultLoader {
 			return null;
 		}
 
-		Set<LoggingPoint> loggingPoints = new HashSet<LoggingPoint>();
+		Set<LoggingPoint> loggingPoints = new HashSet<>();
 
 		App result = new App("IC3", application.getName());
 		result.setComponentList(application.getComponentsList());

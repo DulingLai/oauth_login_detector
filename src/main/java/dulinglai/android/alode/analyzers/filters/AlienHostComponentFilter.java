@@ -1,13 +1,9 @@
-package dulinglai.android.alode.callbacks.filters;
+package dulinglai.android.alode.analyzers.filters;
+
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
+import soot.*;
 
 import java.util.Set;
-
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.Type;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
 
 /**
  * A callback filter that disallows inner classes from being used in other host
@@ -109,8 +105,8 @@ public class AlienHostComponentFilter extends AbstractCallbackFilter {
 
 	@Override
 	public void reset() {
-		this.activityClass = Scene.v().getSootClassUnsafe(AndroidEntryPointConstants.ACTIVITYCLASS);
-		this.fragmentClass = Scene.v().getSootClassUnsafe(AndroidEntryPointConstants.FRAGMENTCLASS);
+		this.activityClass = Scene.v().getSootClassUnsafe(ComponentConstants.ACTIVITYCLASS);
+		this.fragmentClass = Scene.v().getSootClassUnsafe(ComponentConstants.FRAGMENTCLASS);
 	}
 
 	@Override

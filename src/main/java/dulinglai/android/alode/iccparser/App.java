@@ -1,16 +1,10 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import dulinglai.android.alode.iccparser.Ic3Data.Application.Component;
+import dulinglai.android.alode.iccparser.Ic3Data.Application.Component.IntentFilter;
+import dulinglai.android.alode.iccparser.Ic3Data.Attribute;
 
-import dulinglai.android.alode.iccta.Ic3Data.Application.Component;
-import dulinglai.android.alode.iccta.Ic3Data.Application.Component.IntentFilter;
-import dulinglai.android.alode.iccta.Ic3Data.Attribute;
+import java.util.*;
 
 public class App {
 	private Set<LoggingPoint> loggingPoints = new HashSet<LoggingPoint>();
@@ -214,10 +208,7 @@ class LoggingPoint {
 		if (this.stmtSequence != other.stmtSequence)
 			return false;
 		if (this.app == other.app) {
-			if (this.id == other.id)
-				return true;
-			else
-				return false;
+			return this.id == other.id;
 		}
 		return true;
 	}
@@ -293,11 +284,8 @@ class Intent {
 		/*
 		 * if (null != action && !action.isEmpty()) { return true; }
 		 */
-		if (component != null && !component.isEmpty() && !component.contains("*")
-				&& !component.contains("NULL-CONSTANT"))
-			return false;
-
-		return true;
+		return component == null || component.isEmpty() || component.contains("*")
+				|| component.contains("NULL-CONSTANT");
 	}
 
 	public Intent clone() {
@@ -516,10 +504,8 @@ class Intent {
 		if (string.toLowerCase().contains("harvester"))
 			return true;
 
-		if (string.contains(".*"))
-			return true;
+		return string.contains(".*");
 
-		return false;
 	}
 
 	public boolean hasImportantImpreciseValues() {
@@ -571,10 +557,7 @@ class Intent {
 			 * external use, so the default value is "true".
 			 */
 
-			if (component.getIntentFiltersCount() > 0)
-				exported = true;
-			else
-				exported = false;
+			exported = component.getIntentFiltersCount() > 0;
 
 			if (component.hasExported())
 				// Overriden

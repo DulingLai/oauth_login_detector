@@ -1,25 +1,16 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
+import dulinglai.android.alode.entryPointCreators.components.ComponentEntryPointCollection;
 import org.pmw.tinylog.Logger;
-import soot.Body;
-import soot.Local;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.Unit;
+import soot.*;
 import soot.javaToJimple.LocalGenerator;
 import soot.jimple.Jimple;
 import soot.jimple.Stmt;
-import dulinglai.android.alode.entryPointCreators.components.ComponentEntryPointCollection;
 import soot.util.Chain;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
+
+import java.util.*;
 
 public class IccInstrumenter {
 
@@ -59,7 +50,7 @@ public class IccInstrumenter {
 
 		Logger.info("[IccTA] Lauching ICC Redirection Creation...");
 		for (IccLink link : iccLinks) {
-			if (link.fromU == null) {
+			if (link.getFromU() == null) {
 				continue;
 			}
 			redirectionCreator.redirectToDestination(link);

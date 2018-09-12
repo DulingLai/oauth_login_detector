@@ -1,42 +1,48 @@
-package dulinglai.android.alode.callbacks;
+package dulinglai.android.alode.analyzers;
 
-import dulinglai.android.alode.callbacks.CallbackDefinition.CallbackType;
-import dulinglai.android.alode.callbacks.filters.ICallbackFilter;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
+import dulinglai.android.alode.analyzers.CallbackDefinition.CallbackType;
+import dulinglai.android.alode.analyzers.filters.ICallbackFilter;
 import dulinglai.android.alode.entryPointCreators.SimulatedCodeElementTag;
 import dulinglai.android.alode.graphBuilder.AbstractWidgetNode;
 import dulinglai.android.alode.graphBuilder.ClickWidgetNode;
 import dulinglai.android.alode.graphBuilder.EditWidgetNode;
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import dulinglai.android.alode.resources.resources.LayoutFileParser;
 import dulinglai.android.alode.sootData.values.IValueProvider;
 import dulinglai.android.alode.sootData.values.SimpleConstantValueProvider;
+import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import dulinglai.android.alode.utils.sootUtils.ResourceUtils;
 import dulinglai.android.alode.utils.sootUtils.SootMethodRepresentationParser;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.*;
 import soot.jimple.toolkits.callgraph.Edge;
+import soot.toolkits.graph.BriefUnitGraph;
+import soot.toolkits.graph.UnitGraph;
+import soot.toolkits.scalar.CombinedDUAnalysis;
+import soot.toolkits.scalar.SimpleLocalDefs;
 import soot.toolkits.scalar.UnitValueBoxPair;
+import soot.util.Chain;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.*;
 
-public abstract class AbstractWidgetAnalyzer {
+public abstract class AbstractJimpleAnalyzer {
 
     private static final String SIG_CAR_CREATE = "<android.car.Car: android.car.Car createCar(android.content.Context,android.content.ServiceConnection)>";
 
     protected final SootClass scContext = Scene.v().getSootClassUnsafe("android.content.Context");
 
     protected final SootClass scBroadcastReceiver = Scene.v()
-            .getSootClassUnsafe(AndroidEntryPointConstants.BROADCASTRECEIVERCLASS);
+            .getSootClassUnsafe(ComponentConstants.BROADCASTRECEIVERCLASS);
     protected final SootClass scServiceConnection = Scene.v()
-            .getSootClassUnsafe(AndroidEntryPointConstants.SERVICECONNECTIONINTERFACE);
+            .getSootClassUnsafe(ComponentConstants.SERVICECONNECTIONINTERFACE);
 
     protected final SootClass scFragmentTransaction = Scene.v().getSootClassUnsafe("android.app.FragmentTransaction");
-    protected final SootClass scFragment = Scene.v().getSootClassUnsafe(AndroidEntryPointConstants.FRAGMENTCLASS);
+    protected final SootClass scFragment = Scene.v().getSootClassUnsafe(ComponentConstants.FRAGMENTCLASS);
 
     protected final SootClass scSupportFragmentTransaction = Scene.v()
             .getSootClassUnsafe("android.support.v4.app.FragmentTransaction");
@@ -57,36 +63,46 @@ public abstract class AbstractWidgetAnalyzer {
     protected IValueProvider valueProvider = new SimpleConstantValueProvider();
 
     protected Set<String> activityList;
+    Map<SootClass, SootClass> sourceClassesForFurtherAnalysis;
+    Map<SootClass, SootClass> classMapForActivityHierarchy;
     LayoutFileParser layoutFileParser;
 
     protected final MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
+    protected final MultiMap<SootClass, String> potentialLoginMap = new HashMultiMap<>();
     protected Set<SootMethod> findViewMethod = new HashSet<>();
-    protected Map<SootClass, SootClass> baseActivityMapping = new HashMap<>();
-    protected Set<SootClass> nestedActivitySet = new HashSet<>();
+    protected MultiMap<SootClass, SootClass> baseActivityMapping = new HashMultiMap<>();
+    protected Set<SootClass> baseActivitySet = new HashSet<>();
 
-    protected Set<EditWidgetNode> editTextWidgetSet;
-    protected Set<ClickWidgetNode> clickWidgetNodeSet;
-    protected Map<SootClass, Set<AbstractWidgetNode>> ownershipEdges;
+    private Map<SootClass, String> setContentViewWrapperMap = new HashMap<>();
 
-    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList
-            , LayoutFileParser layoutFileParser) throws IOException {
-        this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList, layoutFileParser);
+    protected List<EditWidgetNode> editTextWidgetList;
+    protected List<ClickWidgetNode> clickWidgetNodeList;
+    protected MultiMap<SootClass, AbstractWidgetNode> ownershipEdges;
+
+    public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList
+            , LayoutFileParser layoutFileParser, Map<SootClass, SootClass> sourceClassesForFurtherAnalysis) throws IOException {
+        this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList,
+                layoutFileParser, sourceClassesForFurtherAnalysis);
     }
 
-    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses,
+    public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                   String callbackFile, int maxCallbacksPerComponent,
-                                  Set<String> activityList, LayoutFileParser layoutFileParser) throws IOException {
-        this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList, layoutFileParser);
+                                  Set<String> activityList, LayoutFileParser layoutFileParser,
+                                  Map<SootClass, SootClass> sourceClassesForFurtherAnalysis) throws IOException {
+        this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList,
+                layoutFileParser, sourceClassesForFurtherAnalysis);
     }
 
-    public AbstractWidgetAnalyzer(Set<SootClass> entryPointClasses,
+    public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                   Set<String> androidCallbacks, int maxCallbacksPerComponent,
-                                  Set<String> activityList, LayoutFileParser layoutFileParser) {
+                                  Set<String> activityList, LayoutFileParser layoutFileParser,
+                                  Map<SootClass, SootClass> sourceClassesForFurtherAnalysis) {
         this.entryPointClasses = entryPointClasses;
         this.androidCallbacks = androidCallbacks;
         this.maxCallbacksPerComponent = maxCallbacksPerComponent;
         this.activityList = activityList;
         this.layoutFileParser = layoutFileParser;
+        this.sourceClassesForFurtherAnalysis = sourceClassesForFurtherAnalysis;
     }
 
     /**
@@ -138,7 +154,7 @@ public abstract class AbstractWidgetAnalyzer {
      * Collects the callback methods for all Android default handlers implemented in
      * the source code.
      */
-    public void collectWidgets() {
+    public void analyzeJimpleClasses() {
         // Initialize the filters
         for (ICallbackFilter filter : callbackFilters)
             filter.reset();
@@ -538,7 +554,34 @@ public abstract class AbstractWidgetAnalyzer {
             }
         }
 
+        if (returnType.equalsIgnoreCase("android.view.View")) {
+            for (Value arg : inv.getArgs()) {
+                if (arg.getType().toString().equals("int")) {
+                    if (arg.toString().matches("-?\\d+"))
+                        return true;
+                }
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * Checks whether this invocation calls the Facebook login widgets
+     * @param inv The invocaton to check
+     * @return True if this invocation calls Facebook login
+     */
+    boolean invokesFacebookLogin(InvokeExpr inv) {
+        return inv.getMethod().getDeclaringClass().getName().contains("com.facebook.login.widget.LoginButton");
+    }
+
+    /**
+     * Checks whether this invocation calls the Google login widgets
+     * @param inv The invocaton to check
+     * @return True if this invocation calls Google login
+     */
+    boolean invokesGoogleLogin(InvokeExpr inv) {
+        return inv.getMethod().getDeclaringClass().getName().contains("com.google.android.gms.auth.api.signin");
     }
 
     boolean isExportedActivityClass(String className) {
@@ -580,142 +623,255 @@ public abstract class AbstractWidgetAnalyzer {
     }
 
     /**
-     * Check if the value is reassigned to another local
-     * @param usePair The use pair to check for reassignment
+     * Creates edit text widgets
+     * @param invokeExprList The invoke expr list that invokes on the widget local variable
+     * @return An edit text widget
      */
-    protected Unit reassignsLocal(List<UnitValueBoxPair> usePair){
-        for (UnitValueBoxPair anUsePair : usePair) {
-            Unit useUnit = anUsePair.getUnit();
-
-            if (useUnit instanceof Stmt) {
-                Stmt newStmt = (Stmt) useUnit;
-                if (newStmt instanceof AssignStmt) {
-                    Value newRightOp = ((AssignStmt) newStmt).getRightOp();
-                    Value newLeftOp = ((AssignStmt) newStmt).getLeftOp();
-
-                    if (newRightOp instanceof CastExpr) {
-                        return useUnit;
-                    }
-                }
-            }
-        }
-        return null;
+    EditWidgetNode createNewEditTextWidget(List<InvokeExpr> invokeExprList) {
+        return createNewEditTextWidget(invokeExprList, -1);
     }
 
     /**
      * Creates edit text widgets
-     * @param usePair The use pair used for def-use analysis
-     * @param leftOp The local variable
-     * @return
+     * @param invokeExprList The invoke expr list that invokes on the widget local variable
+     * @param resourceId The resource id of the widget
+     * @return An edit text widget
      */
-    EditWidgetNode createNewEditTextWidget(List<UnitValueBoxPair> usePair, Value leftOp) {
-        return createNewEditTextWidget(usePair, leftOp, -1);
-    }
-
-    /**
-     * Creates edit text widgets
-     * @param usePair The use pair used for def-use analysis
-     * @param leftOp The local variable
-     * @return
-     */
-    EditWidgetNode createNewEditTextWidget(List<UnitValueBoxPair> usePair, Value leftOp, int resourceId) {
-        int resId = resourceId;
+    EditWidgetNode createNewEditTextWidget(List<InvokeExpr> invokeExprList, int resourceId) {
         String text = "";
         String contentDescription = "";
         String hint = "";
         int inputType = -1;
 
-        for (UnitValueBoxPair anUsePair : usePair) {
-            Unit useUnit = anUsePair.getUnit();
+        for (InvokeExpr inv : invokeExprList) {
+            SootMethod sootMethod = inv.getMethod();
+            Value arg = inv.getArg(0);
+            // Collect setInputType
+            if (sootMethod.getName().equals("setInputType"))
+                inputType = Integer.parseInt(arg.toString());
 
-            if (useUnit instanceof Stmt) {
-                Stmt newStmt = (Stmt) useUnit;
-
-                if (newStmt.containsInvokeExpr()) {
-                    InvokeExpr inv = newStmt.getInvokeExpr();
-                    if (inv instanceof InstanceInvokeExpr) {
-                        if (((InstanceInvokeExpr) inv).getBase().equals(leftOp)) {
-                            SootMethod sootMethod = inv.getMethod();
-                            Value arg = inv.getArg(0);
-                            // Collect setInputType
-                            if (sootMethod.getName().equals("setInputType"))
-                                inputType = Integer.parseInt(arg.toString());
-
-                            // Collect setHint
-                            if (sootMethod.getName().equals("setHint") || sootMethod.getName().equals("setHintText")) {
-                                hint = arg.toString();
-                            }
-
-                            // Collect text
-                            if (sootMethod.getName().equals("setText"))
-                                text = arg.toString();
-
-                            // Collect Content Description
-                            if (sootMethod.getName().equals("setContentDescription"))
-                                contentDescription = arg.toString();
-                        }
-                    }
-                }
+            // Collect setHint
+            if (sootMethod.getName().equals("setHint") || sootMethod.getName().equals("setHintText")) {
+                hint = arg.toString();
             }
+
+            // Collect text
+            if (sootMethod.getName().equals("setText"))
+                text = arg.toString();
+
+            // Collect Content Description
+            if (sootMethod.getName().equals("setContentDescription"))
+                contentDescription = arg.toString();
         }
-        return new EditWidgetNode(resId,text,contentDescription,hint,inputType);
+        return new EditWidgetNode(resourceId,text,contentDescription,hint,inputType);
     }
 
     /**
      * Creates clickable widgets
-     * @param usePair The use pair used for def-use analysis
-     * @param leftOp The local variable
-     * @return
+     * @param invokeExprList The invoke expr list that invokes on the widget local variable
+     * @return The clickable widget. If no click listener is attached, return null
      */
-    ClickWidgetNode createNewClickWidget(List<UnitValueBoxPair> usePair, Value leftOp) {
-        return createNewClickWidget(usePair,leftOp,-1);
+    ClickWidgetNode createNewClickWidget(List<InvokeExpr> invokeExprList) {
+        return createNewClickWidget(invokeExprList,-1);
     }
 
     /**
      * Creates clickable widgets
-     * @param usePair The use pair used for def-use analysis
-     * @param leftOp The local variable
-     * @return
+     * @param invokeExprList The invoke expr list that invokes on the widget local variable
+     * @param resourceId The resource id of the widget
+     * @return The clickable widget. If no click listener is attached, return null
      */
-    ClickWidgetNode createNewClickWidget(List<UnitValueBoxPair> usePair, Value leftOp, int resourceId) {
-        int resId = resourceId;
+    ClickWidgetNode createNewClickWidget(List<InvokeExpr> invokeExprList, int resourceId) {
         String text = "";
         ClickWidgetNode.EventType eventType = ClickWidgetNode.EventType.None;
 
-        for (UnitValueBoxPair anUsePair : usePair) {
-            Unit useUnit = anUsePair.getUnit();
-
-            if (useUnit instanceof Stmt) {
-                Stmt newStmt = (Stmt) useUnit;
-                if (newStmt.containsInvokeExpr()) {
-                    InvokeExpr inv = newStmt.getInvokeExpr();
-                    if (inv instanceof InstanceInvokeExpr) {
-                        if (((InstanceInvokeExpr) inv).getBase().equals(leftOp)) {
-                            SootMethod sootMethod = inv.getMethod();
-                            // Collect clickable methods
-                            if (sootMethod.getName().equals("setClickable")
-                                    || sootMethod.getName().equals("setOnClickListener"))
-                                eventType = ClickWidgetNode.EventType.Click;
-                            if (sootMethod.getName().equals("setContextClickable")
-                                    || sootMethod.getName().equals("setOnContextClickListener")
-                                    || sootMethod.getName().equals("setOnCreateContextMenuListener"))
-                                eventType = ClickWidgetNode.EventType.ContextClick;
-                            if (sootMethod.getName().equals("setLongClickable")
-                                    || sootMethod.getName().equals("setOnLongClickListener"))
-                                eventType = ClickWidgetNode.EventType.LongClick;
-                            if (sootMethod.getName().equals("setOnTouchListener"))
-                                eventType = ClickWidgetNode.EventType.Touch;
-                            if (sootMethod.getName().equals("setOnKeyListener"))
-                                eventType = ClickWidgetNode.EventType.Key;
-                        }
-                    }
-                }
+        for (InvokeExpr inv : invokeExprList) {
+            SootMethod sootMethod = inv.getMethod();
+            // Collect clickable methods
+            switch (sootMethod.getName()) {
+                case "setClickable":
+                case "setOnClickListener":
+                    eventType = ClickWidgetNode.EventType.Click;
+                    break;
+                case "setContextClickable":
+                case "setOnContextClickListener":
+                case "setOnCreateContextMenuListener":
+                    eventType = ClickWidgetNode.EventType.ContextClick;
+                    break;
+                case "setLongClickable":
+                case "setOnLongClickListener":
+                    eventType = ClickWidgetNode.EventType.LongClick;
+                    break;
+                case "setOnTouchListener":
+                    eventType = ClickWidgetNode.EventType.Touch;
+                    break;
+                case "setOnKeyListener":
+                    eventType = ClickWidgetNode.EventType.Key;
+                    break;
             }
         }
         if (eventType == ClickWidgetNode.EventType.None)
             return null;
         else
-            return new ClickWidgetNode(resId,text,eventType);
+            return new ClickWidgetNode(resourceId,text,eventType);
+    }
+
+    /**
+     * Add the method wrappers for findViewById, and we also check for method wrappers
+     * @param sm The method to analyze
+     */
+    void addMethodWrappers(SootMethod sm){
+        // skip the original methods
+        final List<String> methodNameList = Arrays.asList("findViewById", "setContentView");
+        for (String methodName : methodNameList) {
+            if (sm.getName().contains(methodName))
+                return;
+        }
+
+        // check wrapper for findViewById
+        if (analyzerUtils.isWrapperForFindViewById(sm)) {
+            findViewMethod.add(sm);
+        }
+    }
+
+    /**
+     * Checks and adds the mappings between class file and layout file
+     * @param sm The SootMethod to check for class layout mappings
+     * @param isBaseActivity If we are checking a base activity
+     */
+    void checkAndAddClassLayoutMappings(SootMethod sm, SootClass sc, boolean isBaseActivity) {
+        if (isBaseActivity) {
+            Chain<Unit> units = sm.retrieveActiveBody().getUnits();
+            for (Unit u : units) {
+                if (u instanceof Stmt) {
+                    Stmt stmt = (Stmt) u;
+                    if (stmt.containsInvokeExpr()) {
+                        InvokeExpr inv = stmt.getInvokeExpr();
+                        // if it invokes setContentView or inflate
+                        if (invokesSetContentView(inv) || invokesInflate(inv)) {
+                            Value val = inv.getArg(0);
+                            if (val.getType().toString().equals("int")) {
+                                Integer intValue = valueProvider.getValue(sm, stmt, val, Integer.class);
+                                if (intValue != null)
+                                    this.layoutClasses.put(sc, intValue);
+                                // if the parameter to setContentView is not a constant int,
+                                // it happens in base activities, otherwise we might have an error
+                                else {
+                                    methodValueAnalysis(sc, sm, val, u);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }  else {
+            Chain<Unit> units = sm.retrieveActiveBody().getUnits();
+            for (Unit u : units) {
+                if (u instanceof Stmt) {
+                    Stmt stmt = (Stmt) u;
+                    if (stmt.containsInvokeExpr()) {
+                        InvokeExpr inv = stmt.getInvokeExpr();
+                        if (invokesSetContentView(inv) || invokesInflate(inv)) {
+                            Value val = inv.getArg(0);
+                            if (val.getType().toString().equals("int")) {
+                                Integer intValue = valueProvider.getValue(sm, stmt, val, Integer.class);
+                                if (intValue != null)
+                                    this.layoutClasses.put(sc, intValue);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (SootClass baseActivity : baseActivityMapping.get(sc)) {
+                if (sm.getSubSignature().equals(setContentViewWrapperMap.get(baseActivity))) {
+                    Value returnValue = retrieveReturnValue(sm);
+                    if (returnValue != null && returnValue.toString().matches("-?\\d+")) {
+                        int resourceId = Integer.parseInt(returnValue.toString());
+                        if (resourceId != 0 && resourceId != -1) {
+                            this.layoutClasses.put(sc, resourceId);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    List<UnitValueBoxPair> runCombinedDUAnalysis(Unit u, UnitGraph unitGraph, int timeout) throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<CombinedDUAnalysis> future = executor.submit(() -> new CombinedDUAnalysis(unitGraph));
+        executor.shutdown();
+
+        try {
+            return future.get(timeout, TimeUnit.SECONDS).getUsesOf(u);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Analyze the return value of a method if the method is called on setContentView
+     * @param sc The SootClass
+     * @param sm The SootMethod
+     * @param val The value which is supposed to be a Local variable
+     * @param u The unit
+     */
+    void methodValueAnalysis(SootClass sc, SootMethod sm, Value val, Unit u) {
+        if (val instanceof Local) {
+            // Inter-procedural analysis to reveal the value
+            BriefUnitGraph unitGraph = new BriefUnitGraph(sm.retrieveActiveBody());
+            SimpleLocalDefs localDefs = new SimpleLocalDefs(unitGraph);
+
+            for (Unit defUnit : localDefs.getDefsOfAt((Local) val, u)) {
+                Stmt defStmt = (Stmt) defUnit;
+                if (defStmt.containsInvokeExpr()) {
+                    InvokeExpr defInv = defStmt.getInvokeExpr();
+                    if (defInv.getMethod().getReturnType().toString().equals("int")) {
+                        SootMethod newMethod = defInv.getMethodRef().tryResolve();
+                        Value returnValue = retrieveReturnValue(newMethod);
+                        setContentViewWrapperMap.put(sc, newMethod.getSubSignature());
+                        if (returnValue != null && returnValue.toString().matches("-?\\d+")) {
+                            int resourceId = Integer.parseInt(returnValue.toString());
+                            if (resourceId != 0 && resourceId != -1) {
+                                this.layoutClasses.put(sc, resourceId);
+                            }
+                        }
+                    }
+                } else {
+                    // If the definition is assigning a constant int value
+                    Value defValue = defStmt.getUseBoxes().get(0).getValue();
+                    if (defValue.getType().toString().equals("int")) {
+                        Integer defIntValue = valueProvider.getValue(sm, defStmt, defValue, Integer.class);
+                        if (defIntValue != null) {
+                            this.layoutClasses.put(sm.getDeclaringClass(), defIntValue);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Gets the return value of this Soot Method
+     * @param sm The soot method to check for return value
+     * @return The return value
+     */
+    Value retrieveReturnValue(SootMethod sm) {
+        if (!sm.isConcrete())
+            return null;
+
+        Chain<Unit> units = sm.retrieveActiveBody().getUnits();
+        for (Unit u : units) {
+            if (u instanceof Stmt) {
+                Stmt stmt = (Stmt)u;
+                if (stmt instanceof ReturnStmt) {
+                    return ((ReturnStmt)stmt).getOp();
+                }
+            }
+        }
+        return null;
     }
 
     protected void analyzeMethodOverrideCallbacks(SootClass sootClass) {
@@ -817,6 +973,54 @@ public abstract class AbstractWidgetAnalyzer {
                 || i.getName().startsWith("android.content.DialogInterface$");
     }
 
+
+    /**
+     * Checks and adds the base activities
+     */
+    void checkAndAddNestedActivities() {
+        // Map the activity class with the base activity that it implements
+        for (SootClass sc : Scene.v().getApplicationClasses()) {
+            if (!isExportedActivityClass(sc.getName()))
+                continue;
+
+            if (SystemClassHandler.isClassInSystemPackage(sc.getName()))
+                continue;
+
+            Set<SootClass> tmpBaseActivitySet = new HashSet<>();
+            MultiMap<SootClass,SootClass> tmpBaseActivityMapping = new HashMultiMap<>();
+
+            SootClass curClass = sc;
+            while (curClass.hasSuperclass()) {
+                SootClass superClass = curClass.getSuperclass();
+                if (superClass.getName().equals("android.app.Activity")
+                        || superClass.getName().contains("android.support.v7.app")
+                        || superClass.getName().contains("android.support.v4.app")) {
+                    if (!curClass.equals(sc)) {
+                        baseActivityMapping.put(sc, curClass);
+                        baseActivitySet.add(curClass);
+                        if (!tmpBaseActivityMapping.isEmpty())
+                            baseActivityMapping.putAll(tmpBaseActivityMapping);
+                        if (!tmpBaseActivitySet.isEmpty())
+                            baseActivitySet.addAll(tmpBaseActivitySet);
+                    }
+                    break;
+                } else {
+                    tmpBaseActivityMapping.put(sc, curClass);
+                    tmpBaseActivitySet.add(curClass);
+                    curClass = superClass;
+                }
+            }
+        }
+
+        // Remove the exported activities
+        Set<SootClass> toRemove = new HashSet<>();
+        for (SootClass sc : baseActivitySet) {
+            if (isExportedActivityClass(sc.getName()))
+                toRemove.add(sc);
+        }
+        baseActivitySet.removeAll(toRemove);
+    }
+
     /**
      * Checks whether the given Soot method comes from a system class. If not, it is
      * added to the list of callback methods.
@@ -889,6 +1093,8 @@ public abstract class AbstractWidgetAnalyzer {
         return this.dynamicManifestComponents;
     }
 
+    public Map<SootClass, SootClass> getClassMapForActivityHierarchy() { return classMapForActivityHierarchy; }
+
     /**
      * Adds a new filter that checks every callback before it is associated with the
      * respective host component
@@ -937,23 +1143,31 @@ public abstract class AbstractWidgetAnalyzer {
      * Gets the EditText widgets set collected from the Jimple files
      * @return The EditText widgets set collected from the Jimple files
      */
-    public Set<EditWidgetNode> getEditTextWidgetSet() {
-        return editTextWidgetSet;
+    public List<EditWidgetNode> getEditTextWidgetList() {
+        return editTextWidgetList;
     }
 
     /**
      * Gets the clickable widgets set collected from the Jimple files
      * @return The clickable widgets set collected from the Jimple files
      */
-    public Set<ClickWidgetNode> getClickWidgetNodeSet() {
-        return clickWidgetNodeSet;
+    public List<ClickWidgetNode> getClickWidgetNodeList() {
+        return clickWidgetNodeList;
     }
 
     /**
      * Gets the ownership edges set collected from the Jimple files
      * @return The ownership edges set collected from the Jimple files
      */
-    public Map<SootClass, Set<AbstractWidgetNode>> getOwnershipEdges() {
+    public MultiMap<SootClass, AbstractWidgetNode> getOwnershipEdges() {
         return ownershipEdges;
+    }
+
+    /**
+     * Gets the potential login mapped to the SootClass
+     * @return The ownership edges set collected from the Jimple files
+     */
+    public MultiMap<SootClass, String> getPotentialLoginMap() {
+        return potentialLoginMap;
     }
 }

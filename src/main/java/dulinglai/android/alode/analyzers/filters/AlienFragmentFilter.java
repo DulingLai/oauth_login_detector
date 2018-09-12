@@ -1,9 +1,9 @@
-package dulinglai.android.alode.callbacks.filters;
+package dulinglai.android.alode.analyzers.filters;
 
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
 import soot.util.MultiMap;
 
 /**
@@ -31,8 +31,7 @@ public class AlienFragmentFilter extends AbstractCallbackFilter {
 	@Override
 	public boolean accepts(SootClass component, SootClass callbackHandler) {
 		if (Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(), this.fragmentClass.getType()))
-			if (!fragmentToActivity.get(callbackHandler).contains(component))
-				return false;
+            return fragmentToActivity.get(callbackHandler).contains(component);
 		return true;
 	}
 
@@ -43,7 +42,7 @@ public class AlienFragmentFilter extends AbstractCallbackFilter {
 
 	@Override
 	public void reset() {
-		this.fragmentClass = Scene.v().getSootClassUnsafe(AndroidEntryPointConstants.FRAGMENTCLASS);
+		this.fragmentClass = Scene.v().getSootClassUnsafe(ComponentConstants.FRAGMENTCLASS);
 	}
 
 }

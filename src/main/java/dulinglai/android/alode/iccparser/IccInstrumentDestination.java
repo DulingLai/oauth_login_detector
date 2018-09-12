@@ -1,27 +1,15 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import soot.Body;
-import soot.Local;
-import soot.Modifier;
-import soot.PatchingChain;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootField;
-import soot.SootMethod;
-import soot.Type;
-import soot.Unit;
-import soot.Value;
-import soot.VoidType;
+import soot.*;
 import soot.javaToJimple.LocalGenerator;
 import soot.jimple.Jimple;
 import soot.jimple.NullConstant;
 import soot.jimple.ReturnStmt;
 import soot.jimple.Stmt;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * One ICC Link contain one source component and one destination component. this
@@ -81,7 +69,7 @@ public class IccInstrumentDestination {
 			boolean noDefaultConstructMethod = false;
 			Unit superU = null;
 			try {
-				superU = (Unit) Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(thisLocal,
+				superU = Jimple.v().newInvokeStmt(Jimple.v().newSpecialInvokeExpr(thisLocal,
 						compSootClass.getMethod(name, new ArrayList<Type>(), VoidType.v()).makeRef()));
 			} catch (Exception ex) {
 				// It is possible that a class doesn't have a default construct
@@ -126,9 +114,9 @@ public class IccInstrumentDestination {
 	}
 
 	public SootField getMessageForIPCField() {
-		SootClass sc = iccLink.fromSM.getDeclaringClass();
+		SootClass sc = iccLink.getFromSM().getDeclaringClass();
 		if (!sc.declaresField("message_for_ipc_static", RefType.v("android.os.Messenge"))) {
-			fieldSendingMessage(iccLink.fromSM);
+			fieldSendingMessage(iccLink.getFromSM());
 		}
 
 		return sc.getFieldByName("message_for_ipc_static");

@@ -1,8 +1,8 @@
-package dulinglai.android.alode.callbacks.filters;
+package dulinglai.android.alode.analyzers.filters;
 
+import dulinglai.android.alode.analyzers.ComponentReachableMethods;
 import soot.SootClass;
 import soot.SootMethod;
-import dulinglai.android.alode.callbacks.ComponentReachableMethods;
 
 /**
  * Common interface for all callback filters. A callback filter takes the

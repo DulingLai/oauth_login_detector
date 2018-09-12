@@ -1,9 +1,9 @@
 package dulinglai.android.alode.entryPointCreators.components;
 
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import soot.SootClass;
 import soot.jimple.Jimple;
 import soot.jimple.NopStmt;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
 
 /**
  * Entry point creator for Android service connections
@@ -19,7 +19,7 @@ public class ServiceConnectionEntryPointCreator extends AbstractComponentEntryPo
 
 	@Override
 	protected void generateComponentLifecycle() {
-		searchAndBuildMethod(AndroidEntryPointConstants.SERVICECONNECTION_ONSERVICECONNECTED, component, thisLocal);
+		searchAndBuildMethod(ComponentConstants.SERVICECONNECTION_ONSERVICECONNECTED, component, thisLocal);
 
 		// methods
 		NopStmt startWhileStmt = Jimple.v().newNopStmt();
@@ -30,7 +30,7 @@ public class ServiceConnectionEntryPointCreator extends AbstractComponentEntryPo
 		body.getUnits().add(endWhileStmt);
 		createIfStmt(startWhileStmt);
 
-		searchAndBuildMethod(AndroidEntryPointConstants.SERVICECONNECTION_ONSERVICEDISCONNECTED, component, thisLocal);
+		searchAndBuildMethod(ComponentConstants.SERVICECONNECTION_ONSERVICEDISCONNECTED, component, thisLocal);
 	}
 
 }

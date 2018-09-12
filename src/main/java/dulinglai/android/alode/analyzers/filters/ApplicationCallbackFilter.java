@@ -1,11 +1,11 @@
-package dulinglai.android.alode.callbacks.filters;
+package dulinglai.android.alode.analyzers.filters;
 
-import java.util.Set;
-
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
+
+import java.util.Set;
 
 /**
  * A callback filter that restricts application callbacks to ComponentCallbacks
@@ -67,13 +67,12 @@ public class ApplicationCallbackFilter extends AbstractCallbackFilter {
 		// not implemented there
 		if (this.applicationClass != null && component.getName().equals(this.applicationClass)
 				&& !callbackHandler.getName().equals(applicationClass)) {
-			if (!Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
-					this.activityLifecycleCallbacks.getType())
-					&& !Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
-							this.provideAssistDataListener.getType())
-					&& !Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
-							this.componentCallbacks.getType()))
-				return false;
+            return Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
+                    this.activityLifecycleCallbacks.getType())
+                    || Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
+                    this.provideAssistDataListener.getType())
+                    || Scene.v().getOrMakeFastHierarchy().canStoreType(callbackHandler.getType(),
+                    this.componentCallbacks.getType());
 		}
 
 		return true;
@@ -82,10 +81,10 @@ public class ApplicationCallbackFilter extends AbstractCallbackFilter {
 	@Override
 	public void reset() {
 		this.activityLifecycleCallbacks = Scene.v()
-				.getSootClassUnsafe(AndroidEntryPointConstants.ACTIVITYLIFECYCLECALLBACKSINTERFACE);
+				.getSootClassUnsafe(ComponentConstants.ACTIVITYLIFECYCLECALLBACKSINTERFACE);
 		this.provideAssistDataListener = Scene.v()
 				.getSootClassUnsafe("android.app.Application$OnProvideAssistDataListener");
-		this.componentCallbacks = Scene.v().getSootClassUnsafe(AndroidEntryPointConstants.COMPONENTCALLBACKSINTERFACE);
+		this.componentCallbacks = Scene.v().getSootClassUnsafe(ComponentConstants.COMPONENTCALLBACKSINTERFACE);
 	}
 
 	@Override
@@ -95,9 +94,9 @@ public class ApplicationCallbackFilter extends AbstractCallbackFilter {
 		if (component.getName().equals(applicationClass))
 			return true;
 		String subSig = callback.getSubSignature();
-		return !AndroidEntryPointConstants.getActivityLifecycleCallbackMethods().contains(subSig)
-				&& !AndroidEntryPointConstants.getComponentCallbackMethods().contains(subSig)
-				&& !AndroidEntryPointConstants.getComponentCallback2Methods().contains(subSig);
+		return !ComponentConstants.getActivityLifecycleCallbackMethods().contains(subSig)
+				&& !ComponentConstants.getComponentCallbackMethods().contains(subSig)
+				&& !ComponentConstants.getComponentCallback2Methods().contains(subSig);
 	}
 
 }

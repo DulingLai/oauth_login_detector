@@ -1,19 +1,19 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
+
+import soot.Scene;
+import soot.SootClass;
 
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-import soot.Scene;
-import soot.SootClass;
-
 public class MessageHandler {
 	private static MessageHandler instance = new MessageHandler();
 
 	private MessageHandler() {
-	};
+	}
 
-	public static MessageHandler v() {
+    public static MessageHandler v() {
 		return instance;
 	}
 

@@ -1,7 +1,7 @@
 package dulinglai.android.alode.config.soot;
 
 import dulinglai.android.alode.config.GlobalConfigs;
-import dulinglai.android.alode.utils.sootUtils.LibraryClassPatcher;
+import dulinglai.android.alode.utils.androidUtils.LibraryClassPatcher;
 import org.pmw.tinylog.Logger;
 import soot.G;
 import soot.PackManager;

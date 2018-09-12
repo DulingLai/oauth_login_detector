@@ -1,4 +1,4 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
 
 public class IccResults {
 //

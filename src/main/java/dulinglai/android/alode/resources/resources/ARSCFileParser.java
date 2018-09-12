@@ -15,14 +15,8 @@ import org.pmw.tinylog.Logger;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 
 /**
  * Parser for reading out the contents of Android's resource.arsc file.
@@ -280,12 +274,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 			} else if (!packageName.equals(other.packageName))
 				return false;
 			if (types == null) {
-				if (other.types != null)
-					return false;
-			} else if (!types.equals(other.types))
-				return false;
-			return true;
-		}
+                return other.types == null;
+			} else return types.equals(other.types);
+        }
 
 	}
 
@@ -417,12 +408,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (id != other.id)
 				return false;
 			if (typeName == null) {
-				if (other.typeName != null)
-					return false;
-			} else if (!typeName.equals(other.typeName))
-				return false;
-			return true;
-		}
+                return other.typeName == null;
+			} else return typeName.equals(other.typeName);
+        }
 	}
 
 	/**
@@ -465,12 +453,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 			} else if (!config.equals(other.config))
 				return false;
 			if (resources == null) {
-				if (other.resources != null)
-					return false;
-			} else if (!resources.equals(other.resources))
-				return false;
-			return true;
-		}
+                return other.resources == null;
+			} else return resources.equals(other.resources);
+        }
 	}
 
 	/**
@@ -509,12 +494,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (resourceID != other.resourceID)
 				return false;
 			if (resourceName == null) {
-				if (other.resourceName != null)
-					return false;
-			} else if (!resourceName.equals(other.resourceName))
-				return false;
-			return true;
-		}
+                return other.resourceName == null;
+			} else return resourceName.equals(other.resourceName);
+        }
 	}
 
 	/**
@@ -554,10 +536,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (getClass() != obj.getClass())
 				return false;
 			ReferenceResource other = (ReferenceResource) obj;
-			if (referenceID != other.referenceID)
-				return false;
-			return true;
-		}
+            return referenceID == other.referenceID;
+        }
 	}
 
 	/**
@@ -591,10 +571,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (getClass() != obj.getClass())
 				return false;
 			AttributeResource other = (AttributeResource) obj;
-			if (attributeID != other.attributeID)
-				return false;
-			return true;
-		}
+            return attributeID == other.attributeID;
+        }
 	}
 
 	/**
@@ -634,12 +612,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			StringResource other = (StringResource) obj;
 			if (value == null) {
-				if (other.value != null)
-					return false;
-			} else if (!value.equals(other.value))
-				return false;
-			return true;
-		}
+                return other.value == null;
+			} else return value.equals(other.value);
+        }
 	}
 
 	/**
@@ -678,10 +653,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (getClass() != obj.getClass())
 				return false;
 			IntegerResource other = (IntegerResource) obj;
-			if (value != other.value)
-				return false;
-			return true;
-		}
+            return value == other.value;
+        }
 	}
 
 	/**
@@ -720,10 +693,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (getClass() != obj.getClass())
 				return false;
 			FloatResource other = (FloatResource) obj;
-			if (Float.floatToIntBits(value) != Float.floatToIntBits(other.value))
-				return false;
-			return true;
-		}
+            return Float.floatToIntBits(value) == Float.floatToIntBits(other.value);
+        }
 	}
 
 	/**
@@ -762,10 +733,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (getClass() != obj.getClass())
 				return false;
 			BooleanResource other = (BooleanResource) obj;
-			if (value != other.value)
-				return false;
-			return true;
-		}
+            return value == other.value;
+        }
 
 	}
 
@@ -832,10 +801,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (g != other.g)
 				return false;
-			if (r != other.r)
-				return false;
-			return true;
-		}
+            return r == other.r;
+        }
 
 	}
 
@@ -885,12 +852,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			ArrayResource other = (ArrayResource) obj;
 			if (arrayElements == null) {
-				if (other.arrayElements != null)
-					return false;
-			} else if (!arrayElements.equals(other.arrayElements))
-				return false;
-			return true;
-		}
+                return other.arrayElements == null;
+			} else return arrayElements.equals(other.arrayElements);
+        }
 
 	}
 
@@ -950,10 +914,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			FractionResource other = (FractionResource) obj;
 			if (type != other.type)
 				return false;
-			if (Float.floatToIntBits(value) != Float.floatToIntBits(other.value))
-				return false;
-			return true;
-		}
+            return Float.floatToIntBits(value) == Float.floatToIntBits(other.value);
+        }
 	}
 
 	/**
@@ -1034,10 +996,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			DimensionResource other = (DimensionResource) obj;
 			if (unit != other.unit)
 				return false;
-			if (value != other.value)
-				return false;
-			return true;
-		}
+            return value == other.value;
+        }
 	}
 
 	/**
@@ -1076,12 +1036,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			ComplexResource other = (ComplexResource) obj;
 			if (value == null) {
-				if (other.value != null)
-					return false;
-			} else if (!value.equals(other.value))
-				return false;
-			return true;
-		}
+                return other.value == null;
+			} else return value.equals(other.value);
+        }
 	}
 
 	protected static class ResTable_Header {
@@ -1114,10 +1071,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 					return false;
 			} else if (!header.equals(other.header))
 				return false;
-			if (packageCount != other.packageCount)
-				return false;
-			return true;
-		}
+            return packageCount == other.packageCount;
+        }
 	}
 
 	/**
@@ -1165,10 +1120,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (size != other.size)
 				return false;
-			if (type != other.type)
-				return false;
-			return true;
-		}
+            return type == other.type;
+        }
 	}
 
 	protected static class ResStringPool_Header {
@@ -1240,10 +1193,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (styleCount != other.styleCount)
 				return false;
-			if (stylesStart != other.stylesStart)
-				return false;
-			return true;
-		}
+            return stylesStart == other.stylesStart;
+        }
 	}
 
 	protected static class ResTable_Package {
@@ -1321,10 +1272,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 					return false;
 			} else if (!name.equals(other.name))
 				return false;
-			if (typeStrings != other.typeStrings)
-				return false;
-			return true;
-		}
+            return typeStrings == other.typeStrings;
+        }
 	}
 
 	/**
@@ -1390,10 +1339,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (res0 != other.res0)
 				return false;
-			if (res1 != other.res1)
-				return false;
-			return true;
-		}
+            return res1 == other.res1;
+        }
 	}
 
 	/**
@@ -1480,10 +1427,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (res0 != other.res0)
 				return false;
-			if (res1 != other.res1)
-				return false;
-			return true;
-		}
+            return res1 == other.res1;
+        }
 	}
 
 	/**
@@ -1707,10 +1652,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (touchscreen != other.touchscreen)
 				return false;
-			if (uiMode != other.uiMode)
-				return false;
-			return true;
-		}
+            return uiMode == other.uiMode;
+        }
 
 	}
 
@@ -1759,10 +1702,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (key != other.key)
 				return false;
-			if (size != other.size)
-				return false;
-			return true;
-		}
+            return size == other.size;
+        }
 	}
 
 	/**
@@ -1799,10 +1740,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 			ResTable_Map_Entry other = (ResTable_Map_Entry) obj;
 			if (count != other.count)
 				return false;
-			if (parent != other.parent)
-				return false;
-			return true;
-		}
+            return parent == other.parent;
+        }
 	}
 
 	/**
@@ -1851,10 +1790,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (res0 != other.res0)
 				return false;
-			if (size != other.size)
-				return false;
-			return true;
-		}
+            return size == other.size;
+        }
 	}
 
 	/**
@@ -1895,12 +1832,9 @@ public class ARSCFileParser extends AbstractResourceParser {
 			if (name != other.name)
 				return false;
 			if (value == null) {
-				if (other.value != null)
-					return false;
-			} else if (!value.equals(other.value))
-				return false;
-			return true;
-		}
+                return other.value == null;
+			} else return value.equals(other.value);
+        }
 	}
 
 	/**
@@ -1957,10 +1891,8 @@ public class ARSCFileParser extends AbstractResourceParser {
 				return false;
 			if (packageId != other.packageId)
 				return false;
-			if (typeId != other.typeId)
-				return false;
-			return true;
-		}
+            return typeId == other.typeId;
+        }
 	}
 
 	public ARSCFileParser() {
@@ -2573,7 +2505,7 @@ public class ARSCFileParser extends AbstractResourceParser {
 		stringIdx += 2;
 		byte[] str = new byte[strLen * 2];
 		System.arraycopy(remainingData, stringIdx, str, 0, strLen * 2);
-		return new String(remainingData, stringIdx, strLen * 2, "UTF-16LE");
+		return new String(remainingData, stringIdx, strLen * 2, StandardCharsets.UTF_16LE);
 	}
 
 	private String readStringUTF8(byte[] remainingData, int stringIdx) throws IOException {
@@ -2582,7 +2514,7 @@ public class ARSCFileParser extends AbstractResourceParser {
 		// the length here is somehow weird
 		int strLen = readUInt8(remainingData, stringIdx + 1);
 		stringIdx += 2;
-		String str = new String(remainingData, stringIdx, strLen, "UTF-8");
+		String str = new String(remainingData, stringIdx, strLen, StandardCharsets.UTF_8);
 		return str;
 	}
 
@@ -2643,12 +2575,12 @@ public class ARSCFileParser extends AbstractResourceParser {
 		return offset;
 	}
 
-	private int readUInt8(byte[] uint16, int offset) throws IOException {
+	private int readUInt8(byte[] uint16, int offset) {
 		int b0 = uint16[0 + offset] & 0x000000FF;
 		return b0;
 	}
 
-	private int readUInt16(byte[] uint16, int offset) throws IOException {
+	private int readUInt16(byte[] uint16, int offset) {
 		int b0 = uint16[0 + offset] & 0x000000FF;
 		int b1 = uint16[1 + offset] & 0x000000FF;
 		return (b1 << 8) + b0;
@@ -2660,7 +2592,7 @@ public class ARSCFileParser extends AbstractResourceParser {
 		return readUInt32(uint32, 0);
 	}
 
-	private int readUInt32(byte[] uint32, int offset) throws IOException {
+	private int readUInt32(byte[] uint32, int offset) {
 		int b0 = uint32[0 + offset] & 0x000000FF;
 		int b1 = uint32[1 + offset] & 0x000000FF;
 		int b2 = uint32[2 + offset] & 0x000000FF;

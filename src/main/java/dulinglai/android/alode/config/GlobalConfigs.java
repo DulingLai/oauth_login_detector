@@ -12,7 +12,7 @@ public class GlobalConfigs {
      * with the data flow tracker
      */
     public enum CallgraphAlgorithm {
-        AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM
+        AutomaticSelection, CHA, VTA, RTA, SPARK, GEOM, OnDemand
     }
     /**
      * Enumeration containing the supported callback analyzers
@@ -39,6 +39,8 @@ public class GlobalConfigs {
     private String projectPath;
     private String inputApkPath;
     private String outputPath = "sootOutput";
+
+    private String iccModelPath;
 
     // Android OS related configs
     private String androidSdkPath;
@@ -97,6 +99,23 @@ public class GlobalConfigs {
      */
     public void setOutputPath(String outputPath){
         this.outputPath = outputPath;
+    }
+
+    /**
+     * Gets the ICC model path
+     * @return the ICC model path
+     */
+    public String getIccModelPath() {
+        return iccModelPath;
+    }
+
+    /**
+     * Sets the ICC model path
+     * @param iccModelPath
+     *          The ICC model path to set
+     */
+    public void setIccModelPath(String iccModelPath) {
+        this.iccModelPath = iccModelPath;
     }
 
     /**
@@ -274,18 +293,4 @@ public class GlobalConfigs {
     // Results file for debugging
     public final static String RESULT_FILE = "/Users/dulinglai/Documents/Study/ResearchProjects/login/scripts/oauth_login_detector/tmp/oauth_result.txt";
     public final static String TEMP_FOLDER = "./tmp/";
-
-    // Bag of words used for naive classifier
-//    public final static String[] userNameWords = {"(?i)(user|account|client|phone|card)[\\s\\_\\-]*(name|id|number|#)",
-//            "(?i)(log|sign)[\\s\\_\\-]*in"};
-//
-//    public final static String[] signUpAliases = {"(?i)(create|need)[\\s\\_\\-]*(a|an|)[\\s\\_\\-]*(new)?[\\s\\_\\-]*(account|user|id)",
-//            "(?i)(sign)[\\s\\_\\-]*up"};
-//
-//    public final static String[] forgotPasswordAliases = {"(?i)forgot[\\s\\_\\-]*(your)?[\\s\\_\\-]*(password|(user|account|card|client)[\\s\\_\\-]*(name|id|number|#))",
-//            "(?i)(trouble|help)[\\s\\_\\-]*(signing|logging)[\\s\\_\\-]*in", "(?i)(old|original|new|confirm)[\\s\\_\\-]*(pass|pin)"};
-//
-//    public final static String[] oauth_providers = {"google", "facebook", "fb", "twitter", "instagram", "kakao"};
-//
-//    public final static String passwordWords = "(?i)(pass|pin)[\\s\\_\\-]*(word|code)";
 }

@@ -6,7 +6,7 @@ import dulinglai.android.alode.resources.axml.AXmlAttribute;
 import dulinglai.android.alode.resources.axml.AXmlHandler;
 import dulinglai.android.alode.resources.axml.AXmlNode;
 import dulinglai.android.alode.resources.axml.ApkHandler;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import org.xmlpull.v1.XmlPullParserException;
 import pxb.android.axml.AxmlVisitor;
 
@@ -62,8 +62,8 @@ public class ProcessManifest {
 	private List<AXmlNode> activityNodes = null;
 	private List<AXmlNode> receiverNodes = null;
 
-    private Set<ActivityNode> activityNodeSet = new HashSet<>();
-    private Set<ServiceNode> serviceNodeSet = new HashSet<>();
+    private List<ActivityNode> activityNodeList = new ArrayList<>();
+    private List<ServiceNode> serviceNodeList = new ArrayList<>();
     private Set<String> launchableActivities = new HashSet<>();
 
 	/**
@@ -88,27 +88,20 @@ public class ProcessManifest {
 	 *            the AppManifest within the given APK will be parsed.
 	 * @throws IOException
 	 *             if an I/O error occurs.
-	 * @throws XmlPullParserException
-	 *             can occur due to a malformed manifest.
 	 * @see {@link ProcessManifest#ProcessManifest(InputStream)}
 	 */
-	public ProcessManifest(File apkFile) throws IOException, XmlPullParserException {
+	public ProcessManifest(File apkFile) throws IOException {
 		if (!apkFile.exists())
 			throw new RuntimeException(
 					String.format("The given APK file %s does not exist", apkFile.getCanonicalPath()));
 
 		this.apk = new ApkHandler(apkFile);
-		InputStream is = null;
-		try {
-			is = this.apk.getInputStream("AndroidManifest.xml");
-			if (is == null)
-				throw new FileNotFoundException(
-						String.format("The file %s does not contain an Android Manifest", apkFile.getAbsolutePath()));
-			this.handle(is);
-		} finally {
-			if (is != null)
-				is.close();
-		}
+        try (InputStream is = this.apk.getInputStream("AndroidManifest.xml")) {
+            if (is == null)
+                throw new FileNotFoundException(
+                        String.format("The file %s does not contain an Android Manifest", apkFile.getAbsolutePath()));
+            this.handle(is);
+        }
 	}
 
 	/**
@@ -119,10 +112,8 @@ public class ProcessManifest {
 	 *            InputStream for an AppManifest.
 	 * @throws IOException
 	 *             if an I/O error occurs.
-	 * @throws XmlPullParserException
-	 *             can occur due to a malformed manifest.
 	 */
-	public ProcessManifest(InputStream manifestIS) throws IOException, XmlPullParserException {
+	public ProcessManifest(InputStream manifestIS) throws IOException {
 		this.handle(manifestIS);
 	}
 
@@ -135,7 +126,7 @@ public class ProcessManifest {
 	 * @throws IOException
 	 *             if an I/O error occurs.
      */
-	protected void handle(InputStream manifestIS) throws IOException {
+    private void handle(InputStream manifestIS) throws IOException {
 		this.axml = new AXmlHandler(manifestIS);
 
 		// get manifest node
@@ -164,10 +155,10 @@ public class ProcessManifest {
 
 		// Process activityNodes and serviceNodes
         for (AXmlNode activityNode : activityNodes){
-            activityNodeSet.add(new ActivityNode(activityNode, packageName));
+            activityNodeList.add(new ActivityNode(activityNode, packageName));
         }
         for (AXmlNode serviceNode : serviceNodes){
-            serviceNodeSet.add(new ServiceNode(serviceNode, packageName));
+            serviceNodeList.add(new ServiceNode(serviceNode, packageName));
         }
 
         // launchable activities
@@ -243,34 +234,6 @@ public class ProcessManifest {
 	}
 
 	/**
-	 * Gets all classes the contain entry points in this applications
-	 * 
-	 * @return All classes the contain entry points in this applications
-	 */
-	public Set<String> getEntryPointClasses() {
-		// If the application is not enabled, there are no entry points
-		if (!isApplicationEnabled())
-			return Collections.emptySet();
-
-		// Collect the components
-		Set<String> entryPoints = new HashSet<String>();
-		for (AXmlNode node : this.activityNodes)
-			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.providerNodes)
-			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.serviceNodes)
-			checkAndAddComponent(entryPoints, node);
-		for (AXmlNode node : this.receiverNodes)
-			checkAndAddComponent(entryPoints, node);
-
-		String appName = getApplicationName();
-		if (appName != null && !appName.isEmpty())
-			entryPoints.add(appName);
-
-		return entryPoints;
-	}
-
-	/**
 	 * Gets all activity classes in this applications
 	 *
 	 * @return All activity classes in this applications
@@ -281,7 +244,7 @@ public class ProcessManifest {
 			return Collections.emptySet();
 
 		// Collect the components
-		Set<String> actitityClasses = new HashSet<String>();
+		Set<String> actitityClasses = new HashSet<>();
 		for (AXmlNode node : this.activityNodes)
 			checkAndAddComponent(actitityClasses, node);
 
@@ -347,7 +310,7 @@ public class ProcessManifest {
 	 * @return list with all activityNodes
 	 */
 	public ArrayList<AXmlNode> getActivityNodes() {
-		return new ArrayList<AXmlNode>(this.activityNodes);
+		return new ArrayList<>(this.activityNodes);
 	}
 
 	/**
@@ -356,7 +319,7 @@ public class ProcessManifest {
 	 * @return list with all receiverNodes
 	 */
 	public ArrayList<AXmlNode> getReceiverNodes() {
-		return new ArrayList<AXmlNode>(this.receiverNodes);
+		return new ArrayList<>(this.receiverNodes);
 	}
 
 	/**
@@ -561,16 +524,16 @@ public class ProcessManifest {
      * Gets the activity node set for AWTG
      * @return The activity node set for AWTG
      */
-	public Set<ActivityNode> getActivityNodeSet(){
-	    return activityNodeSet;
+	public List<ActivityNode> getActivityNodeList(){
+	    return activityNodeList;
     }
 
     /**
      * Gets the service node set for AWTG
      * @return The service node set for AWTG
      */
-    public Set<ServiceNode> getServiceNodeSet(){
-        return serviceNodeSet;
+    public List<ServiceNode> getServiceNodeList(){
+        return serviceNodeList;
     }
     /**
      * Gets the launchable activities from Manifest
@@ -583,67 +546,6 @@ public class ProcessManifest {
     public void setLaunchableActivities(Set<String> launchableActivities) {
         this.launchableActivities = launchableActivities;
     }
-
-	/**
-	 * Adds a new permission to the manifest.
-	 * 
-	 * @param permissionName
-	 *            permission name e.g. "android.permission.INTERNET"
-	 */
-	public void addPermission(String permissionName) {
-		AXmlNode permission = new AXmlNode("uses-permission", null, manifest);
-		AXmlAttribute<String> permissionNameAttr = new AXmlAttribute<String>("name", permissionName,
-				AXmlHandler.ANDROID_NAMESPACE);
-		permission.addAttribute(permissionNameAttr);
-	}
-
-	/**
-	 * Adds a new provider to the manifest
-	 * 
-	 * @param node
-	 *            provider represented as an AXmlNode
-	 */
-	public void addProvider(AXmlNode node) {
-		if (providerNodes.isEmpty())
-			providerNodes = new ArrayList<AXmlNode>();
-		providerNodes.add(node);
-	}
-
-	/**
-	 * Adds a new receiver to the manifest
-	 * 
-	 * @param node
-	 *            receiver represented as an AXmlNode
-	 */
-	public void addReceiver(AXmlNode node) {
-		if (receiverNodes.isEmpty())
-			receiverNodes = new ArrayList<AXmlNode>();
-		receiverNodes.add(node);
-	}
-
-	/**
-	 * Adds a new activity to the manifest
-	 * 
-	 * @param node
-	 *            activity represented as an AXmlNode
-	 */
-	public void addActivity(AXmlNode node) {
-		if (activityNodes.isEmpty())
-			activityNodes = new ArrayList<AXmlNode>();
-		activityNodes.add(node);
-	}
-
-	/**
-	 * Adds a new service to the manifest
-	 * 
-	 * @param node
-	 *            service represented as an AXmlNode
-	 */
-	public void addService(AXmlNode node) {
-		if (serviceNodes.isEmpty())
-			serviceNodes = new ArrayList<AXmlNode>();
-		serviceNodes.add(node);
-	}
 
 	/**
 	 * Closes this apk file and all resources associated with it

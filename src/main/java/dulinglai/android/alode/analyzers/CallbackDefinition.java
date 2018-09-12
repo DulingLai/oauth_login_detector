@@ -1,4 +1,4 @@
-package dulinglai.android.alode.callbacks;
+package dulinglai.android.alode.analyzers;
 
 import soot.SootMethod;
 
@@ -98,12 +98,9 @@ public class CallbackDefinition {
 		} else if (!targetMethod.equals(other.targetMethod))
 			return false;
 		if (parentMethod == null) {
-			if (other.parentMethod != null)
-				return false;
-		} else if (!parentMethod.equals(other.parentMethod))
-			return false;
-		return true;
-	}
+            return other.parentMethod == null;
+		} else return parentMethod.equals(other.parentMethod);
+    }
 	
 	@Override
 	public String toString() {

@@ -14,6 +14,7 @@ public class MainClass {
     // Files
     private static final String INPUT_APK_PATH_CONFIG = "i";
     private static final String OUTPUT_APK_PATH_CONFIG = "o";
+    private static final String ICC_MODEL_CONFIG = "m";
 
     // Analysis Config
     private static final String CG_ALGO = "cg";
@@ -42,6 +43,7 @@ public class MainClass {
         Option output = Option.builder(OUTPUT_APK_PATH_CONFIG).required(false).longOpt("output").hasArg(true).desc("output directory (default to \"sootOutput\")").build();
         Option sdkPath = Option.builder(ANDROID_SDK_PATH_CONFIG).required(false).longOpt("sdk").hasArg(true).desc("path to android sdk (default value can be set in config file)").build();
         Option apiLevel = Option.builder(ANDROID_API_LEVEL_CONFIG).required(false).type(Number.class).longOpt("api").hasArg(true).desc("api level (default to 23)").build();
+        Option iccModel = Option.builder(ICC_MODEL_CONFIG).required(true).longOpt("model").hasArg(true).desc("icc model (produced by IC3)").build();
         Option maxCallback = Option.builder(MAX_CALLBACK).required(false).type(Number.class).hasArg(true).desc("the maximum number of callbacks modeled for each component (default to 20)").build();
         Option cgAlgo = Option.builder(CG_ALGO).required(false).hasArg(true).desc("callgraph algorithm to use (AUTO, CHA, VTA, RTA, SPARK, GEOM); default: AUTO").build();
         Option timeOut = Option.builder(MAX_TIMEOUT).required(false).hasArg(true).desc("maximum timeout during callback analysis in seconds (default: 60)").build();
@@ -54,6 +56,7 @@ public class MainClass {
         options.addOption(output);
         options.addOption(sdkPath);
         options.addOption(apiLevel);
+        options.addOption(iccModel);
         options.addOption(cgAlgo);
         options.addOption(timeOut);
         options.addOption(maxCallback);
@@ -62,7 +65,7 @@ public class MainClass {
         options.addOption(version);
     }
 
-    public static void main(String[] args) throws Exception{
+    public static void main(String[] args) {
         MainClass mainClass = new MainClass();
         mainClass.run(args);
     }
@@ -72,7 +75,7 @@ public class MainClass {
      *
      * @param args the command line arguments passed from main().
      */
-    private void run(String[] args) throws Exception {
+    private void run(String[] args) {
         // Initial check for the number of arguments
         final HelpFormatter formatter = new HelpFormatter();
         if (args.length == 0) {
@@ -106,6 +109,7 @@ public class MainClass {
             // print the options for debugging
             Logger.debug("Project Dir: "+config.getProjectPath());
             Logger.debug("Input APK path: "+config.getInputApkPath());
+            Logger.debug("ICC model: "+config.getIccModelPath());
             Logger.debug("Output path: "+config.getOutputPath());
             Logger.debug("Android SDK path: "+config.getAndroidSdkPath());
             Logger.debug("Android API level: "+config.getAndroidApiLevel());
@@ -116,7 +120,7 @@ public class MainClass {
 
             // run the analysis
             app.runAnalysis();
-
+            System.exit(0);
         } catch (ParseException e) {
             // print the error message
             Logger.error(e.getMessage());
@@ -143,6 +147,15 @@ public class MainClass {
             String outputPath = cmd.getOptionValue(OUTPUT_APK_PATH_CONFIG);
             if (outputPath != null && !outputPath.isEmpty())
                 config.setOutputPath(outputPath);
+        }
+
+        if (cmd.hasOption(ICC_MODEL_CONFIG) || cmd.hasOption("model")) {
+            String iccModelPath = cmd.getOptionValue(ICC_MODEL_CONFIG);
+            if (iccModelPath != null && !iccModelPath.isEmpty())
+                config.setIccModelPath(iccModelPath);
+        } else {
+            Logger.error("ERROR: ICC model is required!");
+            System.exit(1);
         }
 
         // Android SDK
@@ -192,13 +205,14 @@ public class MainClass {
             Logger.error("Wrong android SDK path!");
             System.exit(1);
         }
+        if (!FileUtils.validateFile(config.getIccModelPath())){
+            Logger.error("Wrong ICC model path!");
+            System.exit(1);
+        }
 
         // set the android JAR
         int targetApiLevel = config.getAndroidApiLevel();
-        if(targetApiLevel==23)
-            config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-23/android.jar");
-        else
-            config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-"+targetApiLevel+"/android.jar");
+        config.setAndroidJarPath(config.getAndroidSdkPath()+"/platforms/android-"+targetApiLevel+"/android.jar");
 
     }
 }

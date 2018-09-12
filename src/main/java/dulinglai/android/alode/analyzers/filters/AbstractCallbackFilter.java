@@ -1,6 +1,6 @@
-package dulinglai.android.alode.callbacks.filters;
+package dulinglai.android.alode.analyzers.filters;
 
-import dulinglai.android.alode.callbacks.ComponentReachableMethods;
+import dulinglai.android.alode.analyzers.ComponentReachableMethods;
 
 /**
  * Abstract base class for callback filters

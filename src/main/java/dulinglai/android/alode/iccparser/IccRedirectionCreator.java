@@ -1,44 +1,19 @@
-package dulinglai.android.alode.iccta;
+package dulinglai.android.alode.iccparser;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import soot.Body;
-import soot.Local;
-import soot.Modifier;
-import soot.NullType;
-import soot.PatchingChain;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.Type;
-import soot.Unit;
-import soot.Value;
-import soot.ValueBox;
-import soot.VoidType;
-import soot.javaToJimple.LocalGenerator;
-import soot.jimple.InstanceInvokeExpr;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeExpr;
-import soot.jimple.Jimple;
-import soot.jimple.JimpleBody;
-import soot.jimple.NullConstant;
-import soot.jimple.Stmt;
 import dulinglai.android.alode.entryPointCreators.components.ActivityEntryPointInfo;
 import dulinglai.android.alode.entryPointCreators.components.ComponentEntryPointCollection;
 import dulinglai.android.alode.entryPointCreators.components.ServiceEntryPointInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import soot.*;
+import soot.javaToJimple.LocalGenerator;
+import soot.jimple.*;
 import soot.tagkit.Tag;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
 import soot.util.NumberedString;
+
+import java.util.*;
 
 public class IccRedirectionCreator {
 
@@ -62,7 +37,7 @@ public class IccRedirectionCreator {
 		 * @param redirectorMethod
 		 *            The redirector method that is being called
 		 */
-		public void onRedirectorCallInserted(IccLink link, Stmt callStmt, SootMethod redirectorMethod);
+        void onRedirectorCallInserted(IccLink link, Stmt callStmt, SootMethod redirectorMethod);
 
 	}
 
@@ -228,7 +203,7 @@ public class IccRedirectionCreator {
 		}
 
 		String newSM_name = "redirector" + num++;
-		SootMethod newSM = Scene.v().makeSootMethod(newSM_name, Collections.<Type>singletonList(INTENT_TYPE),
+		SootMethod newSM = Scene.v().makeSootMethod(newSM_name, Collections.singletonList(INTENT_TYPE),
 				VoidType.v(), Modifier.STATIC | Modifier.PUBLIC);
 		dummyMainClass.addMethod(newSM);
 		JimpleBody b = Jimple.v().newBody(newSM);
@@ -259,7 +234,7 @@ public class IccRedirectionCreator {
 			return null;
 		}
 		String newSM_name = "redirector" + num++;
-		SootMethod newSM = Scene.v().makeSootMethod(newSM_name, Collections.<Type>singletonList(INTENT_TYPE),
+		SootMethod newSM = Scene.v().makeSootMethod(newSM_name, Collections.singletonList(INTENT_TYPE),
 				VoidType.v(), Modifier.STATIC | Modifier.PUBLIC);
 		dummyMainClass.addMethod(newSM);
 		JimpleBody b = Jimple.v().newBody(newSM);

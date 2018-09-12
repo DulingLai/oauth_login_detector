@@ -1,30 +1,11 @@
-package dulinglai.android.alode.utils.sootUtils;
-
-import java.util.Collections;
+package dulinglai.android.alode.utils.androidUtils;
 
 import dulinglai.android.alode.sootData.EssentialMethodTag;
-import soot.Body;
-import soot.IntType;
-import soot.Local;
-import soot.Modifier;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootField;
-import soot.SootFieldRef;
-import soot.SootMethod;
-import soot.Type;
-import soot.Unit;
-import soot.VoidType;
+import soot.*;
 import soot.javaToJimple.LocalGenerator;
-import soot.jimple.Constant;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeExpr;
-import soot.jimple.Jimple;
-import soot.jimple.JimpleBody;
-import soot.jimple.NullConstant;
-import soot.jimple.Stmt;
-import soot.jimple.StringConstant;
+import soot.jimple.*;
+
+import java.util.Collections;
 
 /**
  * Class for patching OS libraries such as java.lang.Thread so that we get
@@ -43,9 +24,9 @@ public class LibraryClassPatcher {
      * @author Steven Arzt
      *
      */
-    private static interface IMessageObtainCodeInjector {
+    interface IMessageObtainCodeInjector {
 
-        public void injectCode(Body body, Local messageLocal);
+        void injectCode(Body body, Local messageLocal);
 
     }
 
@@ -527,7 +508,7 @@ public class LibraryClassPatcher {
         b.getUnits()
                 .add(Jimple.v().newInvokeStmt(Jimple.v().newVirtualInvokeExpr(thisLocal,
                         Scene.v().makeMethodRef(sc, "handleMessage",
-                                Collections.<Type>singletonList(method.getParameterType(0)), VoidType.v(), false),
+                                Collections.singletonList(method.getParameterType(0)), VoidType.v(), false),
                         firstParam)));
 
         Unit retStmt = Jimple.v().newReturnVoidStmt();
@@ -572,7 +553,7 @@ public class LibraryClassPatcher {
 
         // Invoke p0.run()
         b.getUnits().add(Jimple.v().newInvokeStmt(Jimple.v().newInterfaceInvokeExpr(firstParam,
-                Scene.v().makeMethodRef(runnable, "run", Collections.<Type>emptyList(), VoidType.v(), false))));
+                Scene.v().makeMethodRef(runnable, "run", Collections.emptyList(), VoidType.v(), false))));
 
         Unit retStmt = Jimple.v().newReturnStmt(IntConstant.v(1));
         b.getUnits().add(retStmt);

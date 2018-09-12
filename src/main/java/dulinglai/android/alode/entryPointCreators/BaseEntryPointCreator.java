@@ -10,58 +10,16 @@
  ******************************************************************************/
 package dulinglai.android.alode.entryPointCreators;
 
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import soot.ArrayType;
-import soot.Body;
-import soot.BooleanType;
-import soot.ByteType;
-import soot.CharType;
-import soot.DoubleType;
-import soot.FloatType;
-import soot.IntType;
-import soot.Local;
-import soot.LongType;
-import soot.PrimType;
-import soot.RefType;
-import soot.Scene;
-import soot.ShortType;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.Type;
-import soot.Unit;
-import soot.Value;
-import soot.VoidType;
+import soot.*;
 import soot.dava.internal.javaRep.DIntConstant;
 import soot.javaToJimple.LocalGenerator;
-import soot.jimple.AssignStmt;
-import soot.jimple.DoubleConstant;
-import soot.jimple.EqExpr;
-import soot.jimple.FloatConstant;
-import soot.jimple.IfStmt;
-import soot.jimple.IntConstant;
-import soot.jimple.InvokeExpr;
-import soot.jimple.Jimple;
-import soot.jimple.LongConstant;
-import soot.jimple.NewArrayExpr;
-import soot.jimple.NewExpr;
-import soot.jimple.NullConstant;
-import soot.jimple.Stmt;
-import soot.jimple.StringConstant;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import soot.jimple.*;
+
+import java.lang.reflect.Modifier;
+import java.util.*;
 
 /**
  * Common base class for all entry point creators. Implementors must override
@@ -251,7 +209,7 @@ public abstract class BaseEntryPointCreator implements IEntryPointCreator {
 	 * @return The newly created invocation statement
 	 */
 	protected Stmt buildMethodCall(SootMethod methodToCall, Body body, Local classLocal, LocalGenerator gen) {
-		return buildMethodCall(methodToCall, body, classLocal, gen, Collections.<SootClass>emptySet());
+		return buildMethodCall(methodToCall, body, classLocal, gen, Collections.emptySet());
 	}
 
 	/**
@@ -494,7 +452,7 @@ public abstract class BaseEntryPointCreator implements IEntryPointCreator {
 	 */
 	protected Local generateClassConstructor(SootClass createdClass, Body body) {
 		return this.generateClassConstructor(createdClass, body, new HashSet<SootClass>(),
-				Collections.<SootClass>emptySet(), null);
+				Collections.emptySet(), null);
 	}
 
 	/**
@@ -752,13 +710,9 @@ public abstract class BaseEntryPointCreator implements IEntryPointCreator {
 	}
 
 	protected static boolean isSimpleType(String t) {
-		if (t.equals("java.lang.String") || t.equals("void") || t.equals("char") || t.equals("byte")
-				|| t.equals("short") || t.equals("int") || t.equals("float") || t.equals("long") || t.equals("double")
-				|| t.equals("boolean")) {
-			return true;
-		} else {
-			return false;
-		}
+        return t.equals("java.lang.String") || t.equals("void") || t.equals("char") || t.equals("byte")
+                || t.equals("short") || t.equals("int") || t.equals("float") || t.equals("long") || t.equals("double")
+                || t.equals("boolean");
 	}
 
 	protected Value getSimpleDefaultValue(Type t) {

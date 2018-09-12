@@ -1,25 +1,16 @@
-package dulinglai.android.alode.callbacks;
+package dulinglai.android.alode.analyzers;
+
+import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
+import soot.*;
+import soot.jimple.InstanceInvokeExpr;
+import soot.jimple.toolkits.callgraph.*;
+import soot.util.queue.ChunkedQueue;
+import soot.util.queue.QueueReader;
 
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
-
-import soot.Kind;
-import soot.MethodOrMethodContext;
-import soot.RefType;
-import soot.Scene;
-import soot.SootClass;
-import soot.SootMethod;
-import soot.jimple.InstanceInvokeExpr;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
-import soot.jimple.toolkits.callgraph.Edge;
-import soot.jimple.toolkits.callgraph.EdgePredicate;
-import soot.jimple.toolkits.callgraph.Filter;
-import soot.jimple.toolkits.callgraph.ReachableMethods;
-import soot.jimple.toolkits.callgraph.Targets;
-import soot.util.queue.ChunkedQueue;
-import soot.util.queue.QueueReader;
 
 /**
  * Helper class that computes reachable methods only from a given set of
@@ -104,8 +95,7 @@ public class ComponentReachableMethods {
 							// We do not expect callback registrations in
 							// any
 							// calls to system classes
-							if (SystemClassHandler.isClassInSystemPackage(refMethod.getDeclaringClass().getName()))
-								return false;
+                            return !SystemClassHandler.isClassInSystemPackage(refMethod.getDeclaringClass().getName());
 						}
 					} else {
 						//TODO check if we do need to filter thread
@@ -117,9 +107,8 @@ public class ComponentReachableMethods {
 						// threads,
 						// so we need a more generic model
 						if (e.tgt().getName().equals("run"))
-							if (Scene.v().getFastHierarchy().canStoreType(e.tgt().getDeclaringClass().getType(),
-									RefType.v("java.lang.Runnable")))
-								return false;
+                            return !Scene.v().getFastHierarchy().canStoreType(e.tgt().getDeclaringClass().getType(),
+                                    RefType.v("java.lang.Runnable"));
 					}
 					return true;
 				}

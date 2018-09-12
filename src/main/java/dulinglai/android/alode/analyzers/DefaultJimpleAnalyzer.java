@@ -1,13 +1,13 @@
-package dulinglai.android.alode.callbacks;
+package dulinglai.android.alode.analyzers;
 
-import dulinglai.android.alode.callbacks.CallbackDefinition.CallbackType;
-import dulinglai.android.alode.callbacks.filters.ICallbackFilter;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointConstants;
-import dulinglai.android.alode.entryPointCreators.AndroidEntryPointUtils;
+import dulinglai.android.alode.analyzers.CallbackDefinition.CallbackType;
+import dulinglai.android.alode.analyzers.filters.ICallbackFilter;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
 import dulinglai.android.alode.memory.ISolverTerminationReason;
+import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import dulinglai.android.alode.resources.resources.LayoutFileParser;
-import dulinglai.android.alode.utils.sootUtils.SystemClassHandler;
+import dulinglai.android.alode.utils.androidUtils.ClassUtils;
+import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.InvokeExpr;
@@ -28,30 +28,36 @@ import java.util.*;
  * @author Steven Arzt
  *
  */
-public class DefaultWidgetAnalyzer extends AbstractWidgetAnalyzer implements IMemoryBoundedSolver {
+public class DefaultJimpleAnalyzer extends AbstractJimpleAnalyzer implements IMemoryBoundedSolver {
 
     private MultiMap<SootClass, SootMethod> callbackWorklist = null;
-    private AndroidEntryPointUtils entryPointUtils = new AndroidEntryPointUtils();
+    private ClassUtils entryPointUtils = new ClassUtils();
     private Set<IMemoryBoundedSolverStatusNotification> notificationListeners = new HashSet<>();
     private ISolverTerminationReason isKilled = null;
 
     //TODO remove result writer
 
-    public DefaultWidgetAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent,
-                                 Set<String> activityList, LayoutFileParser layoutFileParser) throws IOException {
-        super(entryPointClasses, maxCallbacksPerComponent, activityList, layoutFileParser);
+    public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent,
+                                 Set<String> activityList, LayoutFileParser layoutFileParser,
+                                 Map<SootClass, SootClass> classesForFurtherAnalysis) throws IOException {
+        super(entryPointClasses, maxCallbacksPerComponent, activityList, layoutFileParser,
+                classesForFurtherAnalysis);
     }
 
-    public DefaultWidgetAnalyzer(Set<SootClass> entryPointClasses,
+    public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                  String callbackFile, int maxCallbacksPerComponent,
-                                 Set<String> activityList, LayoutFileParser layoutFileParser) throws IOException {
-        super(entryPointClasses, callbackFile, maxCallbacksPerComponent, activityList, layoutFileParser);
+                                 Set<String> activityList, LayoutFileParser layoutFileParser,
+                                 Map<SootClass, SootClass> classesForFurtherAnalysis) throws IOException {
+        super(entryPointClasses, callbackFile, maxCallbacksPerComponent, activityList,
+                layoutFileParser, classesForFurtherAnalysis);
     }
 
-    public DefaultWidgetAnalyzer(Set<SootClass> entryPointClasses,
+    public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                  Set<String> androidCallbacks, int maxCallbacksPerComponent,
-                                 Set<String> activityList, LayoutFileParser layoutFileParser) throws IOException {
-        super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, activityList, layoutFileParser);
+                                 Set<String> activityList, LayoutFileParser layoutFileParser,
+                                 Map<SootClass, SootClass> classesForFurtherAnalysis) {
+        super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, activityList,
+                layoutFileParser, classesForFurtherAnalysis);
     }
 
     /**
@@ -60,14 +66,14 @@ public class DefaultWidgetAnalyzer extends AbstractWidgetAnalyzer implements IMe
      * only registers a new phase that will be executed when Soot is next run
      */
     @Override
-    public void collectWidgets() {
-        super.collectWidgets();
+    public void analyzeJimpleClasses() {
+        super.analyzeJimpleClasses();
 
         Transform transform = new Transform("wjtp.ajc", new SceneTransformer() {
             protected void internalTransform(String phaseName, @SuppressWarnings("rawtypes") Map options) {
                 // Notify the listeners that the solver has been started
                 for (IMemoryBoundedSolverStatusNotification listener : notificationListeners)
-                    listener.notifySolverStarted(DefaultWidgetAnalyzer.this);
+                    listener.notifySolverStarted(DefaultJimpleAnalyzer.this);
 
                 // Do we have to start from scratch or do we have a worklist to
                 // process?
@@ -130,7 +136,7 @@ public class DefaultWidgetAnalyzer extends AbstractWidgetAnalyzer implements IMe
 
                 // Notify the listeners that the solver has been terminated
                 for (IMemoryBoundedSolverStatusNotification listener : notificationListeners)
-                    listener.notifySolverTerminated(DefaultWidgetAnalyzer.this);
+                    listener.notifySolverTerminated(DefaultJimpleAnalyzer.this);
             }
 
         });
@@ -147,23 +153,23 @@ public class DefaultWidgetAnalyzer extends AbstractWidgetAnalyzer implements IMe
     private Collection<? extends MethodOrMethodContext> getLifecycleMethods(SootClass sc) {
         switch (entryPointUtils.getComponentType(sc)) {
             case Activity:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getActivityLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getActivityLifecycleMethods());
             case Service:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getServiceLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getServiceLifecycleMethods());
             case Application:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getApplicationLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getApplicationLifecycleMethods());
             case BroadcastReceiver:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getBroadcastLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getBroadcastLifecycleMethods());
             case Fragment:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getFragmentLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getFragmentLifecycleMethods());
             case ContentProvider:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getContentproviderLifecycleMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getContentproviderLifecycleMethods());
             case GCMBaseIntentService:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getGCMIntentServiceMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getGCMIntentServiceMethods());
             case GCMListenerService:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getGCMListenerServiceMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getGCMListenerServiceMethods());
             case ServiceConnection:
-                return getLifecycleMethods(sc, AndroidEntryPointConstants.getServiceConnectionMethods());
+                return getLifecycleMethods(sc, ComponentConstants.getServiceConnectionMethods());
             case Plain:
                 return Collections.emptySet();
         }

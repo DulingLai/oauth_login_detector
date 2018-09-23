@@ -50,6 +50,9 @@ public class ComponentConstants {
     public static final String ACTIVITY_ONDESTROY = "void onDestroy()";
     public static final String ACTIVITY_ONATTACHFRAGMENT = "void onAttachFragment(android.app.Fragment)";
 
+    public static final String START_ACTIVITY = "void startActivity(android.content.Intent";
+    public static final String START_ACTIVITY_FOR_RESULT = "void startActivityForResult(android.content.Intent";
+
     public static final String CLICKLISTENER = "android.view.View$OnClickListener";
     public static final String CLICKLISTENER_ONCLICK = "void onClick(android.view.View)";
 

@@ -1,12 +1,12 @@
 package dulinglai.android.alode.utils.androidUtils;
 
+import dulinglai.android.alode.iccparser.IccLink;
 import dulinglai.android.alode.resources.androidConstants.ComponentConstants;
 import soot.Scene;
 import soot.SootClass;
 import soot.SootMethod;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Class containing common utility methods for dealing with Android entry points
@@ -28,6 +28,9 @@ public class ClassUtils {
     private SootClass osClassGCMListenerService;
     private SootClass osInterfaceServiceConnection;
     private SootClass osClickListener;
+
+    private Set<Object> grey;
+    private List<SootClass> predActivityClasses;
 
     /**
      * Array containing all types of components supported in Android lifecycles
@@ -166,6 +169,66 @@ public class ClassUtils {
         return componentType == ComponentType.ServiceConnection
                 && ComponentConstants.getServiceConnectionMethods().contains(subsignature);
 
+    }
+
+    /**
+     * Traverse the ICC links to find the predecessor class
+     * @param iccLinks All ICC links to loop through
+     * @param destClass The target destination class
+     * @return The predecessor classes of the target destination class
+     */
+    public List<SootClass> getPredClassesOf(List<IccLink> iccLinks, SootClass destClass) {
+        List<SootClass> predClasses = new ArrayList<>();
+        for (IccLink iccLink : iccLinks) {
+            if (iccLink.getDestinationC().getName().equals(destClass.getName())) {
+                predClasses.add(iccLink.getFromC());
+            }
+        }
+        return predClasses;
+    }
+
+    /**
+     * Traverse the ICC links to find the predecessor activity class
+     * @param iccLinks All ICC links to loop through
+     * @param destClass The target destination class
+     * @return The predecessor activity class of the target destination class
+     */
+    public List<SootClass> getPredActivityClassOf(List<IccLink> iccLinks, SootClass destClass) {
+        depthFirstSearch(destClass, iccLinks);
+        return predActivityClasses;
+    }
+
+    /**
+     * Depth first search on the iterator
+     * @param destClass The destination class to start with
+     * @param iccLinks The ICC links to loop through
+     */
+    private void depthFirstSearch(SootClass destClass, List<IccLink> iccLinks) {
+        // reset grey set and result set
+        grey = new HashSet<>();
+        predActivityClasses = new ArrayList<>();
+
+        for (SootClass s : getPredClassesOf(iccLinks, destClass)) {
+            if (!grey.contains(s))
+                visitNode(s, iccLinks);
+        }
+    }
+
+    private void visitNode(SootClass s, List<IccLink> iccLinks) {
+        grey.add(s);
+        List<SootClass> predClasses = getPredClassesOf(iccLinks, s);
+        Iterator it = predClasses.iterator();
+
+        if (predClasses.size() > 0) {
+            while (it.hasNext()) {
+                Object pred = it.next();
+                ComponentType predType = getComponentType((SootClass) pred);
+                if (predType.equals(ComponentType.Activity))
+                    predActivityClasses.add((SootClass)pred);
+                else if (!grey.contains(pred))
+                    visitNode((SootClass)pred, iccLinks);
+            }
+        }
     }
 
 }

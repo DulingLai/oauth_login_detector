@@ -5,8 +5,7 @@ import dulinglai.android.alode.iccparser.Ic3Data.Application;
 import dulinglai.android.alode.iccparser.Ic3Data.Application.Component.ExitPoint;
 import dulinglai.android.alode.iccparser.Ic3Data.Application.Component.Instruction;
 import dulinglai.android.alode.iccparser.Ic3Data.Attribute;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.pmw.tinylog.Logger;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -17,8 +16,6 @@ import java.util.Map;
 import java.util.Set;
 
 public class Ic3ResultLoader {
-
-	private final static Logger logger = LoggerFactory.getLogger(Ic3ResultLoader.class);
 
 	public static App load(String resultConfigPath) {
 		Ic3Data.Application application;
@@ -33,7 +30,7 @@ public class Ic3ResultLoader {
 				application = builder.build();
 			}
 		} catch (IOException exception) {
-			logger.error("Problem opening or reading from file " + resultConfigPath, exception);
+			Logger.error("Problem opening or reading from file " + resultConfigPath, exception);
 			return null;
 		}
 
@@ -57,6 +54,8 @@ public class Ic3ResultLoader {
 
 				for (ExitPoint.Intent intent : exitPoint.getIntentsList()) {
 					Intent destinationIntent = new Intent(result, loggingPoint);
+
+                    destinationIntent.setSourceClass(component.getName());
 
 					String componentPackage = null;
 					String componentClass = null;

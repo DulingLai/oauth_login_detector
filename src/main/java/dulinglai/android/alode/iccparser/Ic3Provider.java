@@ -41,7 +41,7 @@ public class Ic3Provider implements IccLinkProvider {
                     if (!availableTargetedComponent(intent.getApp(), targetComp.getName())) {
                         continue;
                     }
-                    SootClass fromC = Scene.v().getSootClassUnsafe(intent.getComponentClass());
+                    SootClass fromC = Scene.v().getSootClassUnsafe(intent.getSourceClass());
                     SootMethod fromSM = Scene.v().grabMethod(intent.getLoggingPoint().getCallerMethodSignature());
                     Stmt fromU = linkWithTarget(fromSM, intent.getLoggingPoint().getStmtSequence());
                     IccLink iccLink = new IccLink(fromC, fromSM, fromU, Scene.v().getSootClassUnsafe(targetComp.getName()));
@@ -50,7 +50,7 @@ public class Ic3Provider implements IccLinkProvider {
                     iccLinks.add(iccLink);
                 }
             } else {
-                SootClass fromC = Scene.v().getSootClassUnsafe(intent.getComponentClass());
+                SootClass fromC = Scene.v().getSootClassUnsafe(intent.getSourceClass());
                 String targetCompName = intent.getComponentClass();
                 if (!availableTargetedComponent(intent.getApp(), targetCompName)) {
                     continue;

@@ -8,7 +8,11 @@ import dulinglai.android.alode.analyzers.filters.UnreachableConstructorFilter;
 import dulinglai.android.alode.config.GlobalConfigs;
 import dulinglai.android.alode.config.soot.SootSettings;
 import dulinglai.android.alode.entryPointCreators.AndroidEntryPointCreator;
-import dulinglai.android.alode.graphBuilder.*;
+import dulinglai.android.alode.graphBuilder.ComponentTransitionGraph;
+import dulinglai.android.alode.graphBuilder.componentNodes.*;
+import dulinglai.android.alode.graphBuilder.widgetNodes.AbstractWidgetNode;
+import dulinglai.android.alode.graphBuilder.widgetNodes.ClickWidgetNode;
+import dulinglai.android.alode.graphBuilder.widgetNodes.EditWidgetNode;
 import dulinglai.android.alode.iccparser.Ic3Provider;
 import dulinglai.android.alode.iccparser.IccLink;
 import dulinglai.android.alode.memory.IMemoryBoundedSolver;
@@ -20,6 +24,7 @@ import dulinglai.android.alode.resources.resources.LayoutFileParser;
 import dulinglai.android.alode.resources.resources.controls.AndroidLayoutControl;
 import dulinglai.android.alode.resources.resources.controls.EditTextControl;
 import dulinglai.android.alode.resources.resources.controls.GenericLayoutControl;
+import dulinglai.android.alode.sootData.values.ResourceValueProvider;
 import dulinglai.android.alode.utils.androidUtils.ClassUtils;
 import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import heros.solver.Pair;
@@ -32,7 +37,7 @@ import soot.util.MultiMap;
 import java.io.IOException;
 import java.util.*;
 
-import static dulinglai.android.alode.graphBuilder.graphUtils.resolveExecutionPath;
+//import static dulinglai.android.alode.graphBuilder.graphUtils.resolveExecutionPath;
 
 public class SetupApplication {
     // Logging tags
@@ -40,6 +45,7 @@ public class SetupApplication {
     private static final String CLASS_ANALYZER = "JimpleAnalyzer";
     private static final String LOGIN_DETECTOR = "LoginDetector";
     private static final String ICC_PARSER = "IccParser";
+    private static final String GRAPH_BUILDER = "GraphBuilder";
 
     private String apkPath;
     private String outputDir;
@@ -47,9 +53,7 @@ public class SetupApplication {
     // Resources
     private ProcessManifest manifest;
     private ARSCFileParser resources;
-    private Map<Integer, String> stringResource = new HashMap<>();
-    private Map<Integer, String> resourceId = new HashMap<>();
-    private Map<String, Integer> layoutResource = new HashMap<>();
+    private ResourceValueProvider resourceValueProvider;
 
     // Entry points related
     private AndroidEntryPointCreator entryPointCreator = null;
@@ -63,10 +67,14 @@ public class SetupApplication {
     private long maxTimeout;
     private int maxCallbackAnalysisDepth;
 
-    // Activity Nodes
+    // Component Nodes
     private List<ActivityNode> activityNodeList;
     private List<ServiceNode> serviceNodeList;
+    private List<ContentProviderNode> providerNodeList;
+    private List<BroadcastReceiverNode> receiverNodeList;
+
     private MultiMap<SootClass, Integer> layoutClasses = new HashMultiMap<>();
+    private MultiMap<SootClass, SootClass> baseactivityMapping = new HashMultiMap<>();
 
     // Widget Nodes
     private List<EditWidgetNode> editWidgetNodeList;
@@ -85,8 +93,7 @@ public class SetupApplication {
 
     // Icc Model
     private String iccModel = null;
-    private Map<SootClass, SootClass> classesForFurtherAnalysis = new HashMap<>();
-    private ActivityHierarchy activityHierarchy;
+    private ComponentTransitionGraph componentTransitionGraph;
 
 
     SetupApplication(GlobalConfigs config) {
@@ -117,23 +124,22 @@ public class SetupApplication {
         Logger.info("[{}] DONE: Resource parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", RESOURCE_PARSER);
 
         /*
-         Step 1. Collect activities
+         Step 1. Collect component nodes
           */
         Logger.info("[{}] Collecting activity nodes ...", RESOURCE_PARSER);
         try {
-            collectActivityNodes(apkPath);
+            collectComponentNodes(apkPath);
         } catch (IOException|XmlPullParserException e) {
             Logger.error("[ERROR] Failed to parse the manifest!");
         }
 
         /*
-        Step 2. Build activity hierarchy
+        Step 2. Load IC3 data
          */
         Logger.info("[{}] Loading the ICC Model...", ICC_PARSER);
         Ic3Provider provider = new Ic3Provider(iccModel);
         List<IccLink> iccLinks = provider.getIccLinks();
         Logger.info("[{}] ...End Loading the ICC Model", ICC_PARSER);
-        buildActivityHierarchy(iccLinks,activityNodeList);
 
         /*
         Step 3. Parse XML-based widgets
@@ -150,6 +156,7 @@ public class SetupApplication {
             Set<SootClass> entryPointClasses = prepareJimpleAnalysis(component);
             processJimpleClasses(entryPointClasses, layoutFileParser);
         }
+        Logger.info("[{}] ... End analyzing the class files ...", CLASS_ANALYZER);
 
         /*
         Step 5. Combine the XML-based widgets with the programmatically set widgets and properties
@@ -168,13 +175,14 @@ public class SetupApplication {
         potentialPasswordWidget = loginDetector.getPotentialPasswordWidget();
 
         /*
-        Step 7. Build execution path
+        Step 7. Build activity transition graph
          */
-        MultiMap<SootClass, Set<SootClass>> loginExecutionPath = buildExecutionPath(activityHierarchy,potentialLoginActivity);
+        buildComponentTransitionGraph(iccLinks, activityNodeList, serviceNodeList, providerNodeList, receiverNodeList);
 
         /*
-        Results
+        Step 7. Build execution path
          */
+//        MultiMap<SootClass, Set<SootClass>> loginExecutionPath = buildExecutionPath(activityTransitionGraph,potentialLoginActivity);
 
         // Debug logging
         String packageName = manifest.getPackageName();
@@ -188,56 +196,80 @@ public class SetupApplication {
         }
     }
 
-    private MultiMap<SootClass, Set<SootClass>> buildExecutionPath(ActivityHierarchy activityHierarchy, Set<ActivityNode> potentialLoginActivity) {
-        MultiMap<SootClass, Set<SootClass>> loginExecutionPath = new HashMultiMap<>();
-        for (ActivityNode activityNode : potentialLoginActivity) {
-            SootClass activityClass = Scene.v().getSootClassUnsafe(activityNode.getName());
-            if (activityHierarchy.isActivityInHierarchy(activityClass)){
-                Set<SootClass> launchableActivities = new HashSet<>();
-                for (String launchableActString : manifest.getLaunchableActivities()) {
-                    launchableActivities.add(Scene.v().getSootClassUnsafe(launchableActString));
-                }
-                loginExecutionPath.putAll(resolveExecutionPath(activityHierarchy, activityClass, launchableActivities));
-            } else {
-                Logger.warn("[{}] Failed to find the login activity");
-                //TODO log the error in debug file
-            }
-        }
-        return loginExecutionPath;
-    }
+//    private MultiMap<SootClass, Set<SootClass>> buildExecutionPath(ActivityTransitionGraph activityTransitionGraph, Set<ActivityNode> potentialLoginActivity) {
+//        MultiMap<SootClass, Set<SootClass>> loginExecutionPath = new HashMultiMap<>();
+//        for (ActivityNode activityNode : potentialLoginActivity) {
+//            SootClass activityClass = Scene.v().getSootClassUnsafe(activityNode.getName());
+//            if (activityTransitionGraph.isActivityInHierarchy(activityClass)){
+//                Set<SootClass> launchableActivities = new HashSet<>();
+//                for (String launchableActString : manifest.getLaunchableActivities()) {
+//                    launchableActivities.add(Scene.v().getSootClassUnsafe(launchableActString));
+//                }
+//                loginExecutionPath.putAll(resolveExecutionPath(activityTransitionGraph, activityClass, launchableActivities));
+//            } else {
+//                Logger.warn("[{}] Failed to find the login activity");
+//                //TODO log the error in debug file
+//            }
+//        }
+//        return loginExecutionPath;
+//    }
 
-    private void buildActivityHierarchy(List<IccLink> iccLinks, List<ActivityNode> activityNodeList) {
-        Logger.info("Building activity hierarchy ...");
+    /**
+     * builds the component transition graph based on the ICC links and all component nodes
+     * @param iccLinks The ICC links from IC3
+     * @param activityNodeList All activity nodes from manifest
+     */
+    private void buildComponentTransitionGraph(List<IccLink> iccLinks, List<ActivityNode> activityNodeList,
+                                               List<ServiceNode> serviceNodeList,
+                                               List<ContentProviderNode> providerNodeList,
+                                               List<BroadcastReceiverNode> receiverNodeList) {
+        Logger.info("[{}] Building component transition graph ...", GRAPH_BUILDER);
         ClassUtils classUtils = new ClassUtils();
 
         // Setup activity hierarchy
-        activityHierarchy = new ActivityHierarchy(activityNodeList);
+        componentTransitionGraph = new ComponentTransitionGraph(activityNodeList, serviceNodeList, providerNodeList, receiverNodeList);
 
         // Resolve the activity links
         for (IccLink iccLink : iccLinks) {
             SootClass destClass = iccLink.getDestinationC();
-            SootClass sourceClass = iccLink.getFromSM().getDeclaringClass();
+            SootClass sourceClass = iccLink.getFromC();
             ClassUtils.ComponentType destType = classUtils.getComponentType(destClass);
             ClassUtils.ComponentType sourceType = classUtils.getComponentType(sourceClass);
 
+            // TODO remove debug logs
             Logger.debug("ICC Link: {} -> {} -> {}", sourceClass, iccLink.getFromSM(), destClass);
             Logger.debug("Type: {} -> {}", sourceType, destType);
 
+            /*
+            Connecting component nodes to component nodes
+             */
+            AbstractComponentNode srcComp = componentTransitionGraph.getCompNodeByName(sourceClass.getName());
+            AbstractComponentNode tgtComp = componentTransitionGraph.getCompNodeByName(destClass.getName());
+            if (srcComp!=null && tgtComp!=null)
+                componentTransitionGraph.addTransitionEdge(srcComp, tgtComp);
+            else
+                Logger.warn("[WARN] Failed to find component {} -> {}", sourceClass.getName(), destClass.getName());
+
+
+
+
             if (destType.equals(ClassUtils.ComponentType.Activity)) {
-                if (sourceType.equals(ClassUtils.ComponentType.Activity))
-                    activityHierarchy.addActivityToSubactivities(sourceClass, destClass);
-                else {
-                    if (sourceType.equals(ClassUtils.ComponentType.ClickListener)) {
-                        classesForFurtherAnalysis.put(sourceClass, destClass);
-                    } else {
-                        Logger.debug("[Debug] Source class {} has type {}", sourceClass, sourceType);
+                if (sourceType.equals(ClassUtils.ComponentType.Activity)) {
+                    ActivityNode srcActivity = componentTransitionGraph.getActivityNodeByName(sourceClass.getName());
+                    ActivityNode tgtActivity = componentTransitionGraph.getActivityNodeByName(destClass.getName());
+                    componentTransitionGraph.addTransitionEdge(srcActivity, tgtActivity);
+                } else {
+                    List<SootClass> srcActivityClasses = classUtils.getPredActivityClassOf(iccLinks, destClass);
+                    if (srcActivityClasses!=null && !srcActivityClasses.isEmpty()) {
+                        ActivityNode tgtActivity = componentTransitionGraph.getActivityNodeByName(destClass.getName());
+                        for (SootClass srcActivityClass : srcActivityClasses) {
+                            ActivityNode srcActivity = componentTransitionGraph.getActivityNodeByName(srcActivityClass.getName());
+                            componentTransitionGraph.addTransitionEdge(srcActivity, tgtActivity);
+                        }
                     }
                 }
-            } else if (sourceType.equals(ClassUtils.ComponentType.Activity)) {
-                Logger.debug("[Debug] Destination class {} has type {}", destClass, destType);
             }
         }
-        activityHierarchy.removeNullValues();
     }
 
     /**
@@ -256,6 +288,10 @@ public class SetupApplication {
      * Parse the string resources ("en" only) and other resource ids of the resource packages
      */
     private void parseResources() {
+        Map<Integer, String> stringResource = new HashMap<>();
+        Map<Integer, String> resourceId = new HashMap<>();
+        Map<String, Integer> layoutResource = new HashMap<>();
+
         try {
             resources.parse(apkPath);
         } catch (IOException e) {
@@ -302,15 +338,17 @@ public class SetupApplication {
                 }
             }
         }
+
+        resourceValueProvider = new ResourceValueProvider(stringResource, resourceId, layoutResource);
     }
 
     /**
-     * Parse the apk manifest file for entry point classes and exported activities and services
+     * Parse the apk manifest file for entry point classes and component nodes
      * @param targetApk The target apk file to parse
      * @throws IOException When the apk is not found
      * @throws XmlPullParserException When we failed to parse the apk manifest
      */
-    private void collectActivityNodes(String targetApk) throws IOException, XmlPullParserException {
+    private void collectComponentNodes(String targetApk) throws IOException, XmlPullParserException {
         this.manifest = new ProcessManifest(targetApk);
         Set<String> entryPointString = manifest.getLaunchableActivities();
 
@@ -321,9 +359,11 @@ public class SetupApplication {
                 entrypoints.add(sc);
         }
 
-        // Gets the activities and services nodes from manifest
+        // Gets the component nodes from manifest
         this.activityNodeList = manifest.getActivityNodeList();
         this.serviceNodeList = manifest.getServiceNodeList();
+        this.providerNodeList = manifest.getProviderNodeList();
+        this.receiverNodeList = manifest.getReceiverNodeList();
     }
 
     /**
@@ -364,7 +404,7 @@ public class SetupApplication {
                 if (activityNode.getName()==null)
                     Logger.warn("[Activity Node] Missing activity name...");
                 else if (activityNode.getName().equals(layoutClass.getName())) {
-                    activityNode.setResourceId(layoutClasses.get(layoutClass).iterator().next());
+                    activityNode.setResourceId(layoutClasses.get(layoutClass));
 
                     Set<AbstractWidgetNode> widgetNodeSet = ownershipEdgesClasses.get(layoutClass);
                     if (widgetNodeSet!=null && !widgetNodeSet.isEmpty()) {
@@ -385,21 +425,21 @@ public class SetupApplication {
     private void collectXmlWidgets(MultiMap<String, AndroidLayoutControl> userControls) {
         for (String layoutKeyFull : userControls.keySet()) {
             String layoutKey = layoutKeyFull.substring(layoutKeyFull.lastIndexOf('/') + 1, layoutKeyFull.lastIndexOf('.'));
-            Integer resId = layoutResource.get(layoutKey);
+            Integer resId = resourceValueProvider.getLayoutResourceId(layoutKey);
             if (resId != null) {
                 for (ActivityNode activityNode : activityNodeList) {
-                    if (activityNode.getResourceId() == resId) {
-                        Set<AbstractWidgetNode> newWidgetNodeSet = createWidgetNodeForUserControls(userControls.get(layoutKeyFull));
-                        Set<AbstractWidgetNode> oldWidgetNodeSet = ownershipEdges.get(activityNode);
-                        if (oldWidgetNodeSet!=null) {
-                            if (!oldWidgetNodeSet.isEmpty()) {
+                    for (Integer activityResId : activityNode.getResourceId()) {
+                        if (activityResId.equals(resId)) {
+                            Set<AbstractWidgetNode> oldWidgetNodeSet = ownershipEdges.get(activityNode);
+                            Set<AbstractWidgetNode> newWidgetNodeSet = createWidgetNodeForUserControls(userControls.get(layoutKeyFull), oldWidgetNodeSet);
+                            if (oldWidgetNodeSet != null && !oldWidgetNodeSet.isEmpty()) {
                                 for (AbstractWidgetNode widget : newWidgetNodeSet) {
                                     oldWidgetNodeSet.removeIf(oldWidget -> oldWidget.getResourceId() == widget.getResourceId());
                                 }
+                                newWidgetNodeSet.addAll(oldWidgetNodeSet);
                             }
-                            newWidgetNodeSet.addAll(oldWidgetNodeSet);
+                            ownershipEdges.putAll(activityNode, newWidgetNodeSet);
                         }
-                        ownershipEdges.putAll(activityNode, newWidgetNodeSet);
                     }
                 }
             } else
@@ -407,21 +447,48 @@ public class SetupApplication {
         }
     }
 
-    private Set<AbstractWidgetNode> createWidgetNodeForUserControls(Set<AndroidLayoutControl> androidLayoutControls) {
+    private Set<AbstractWidgetNode> createWidgetNodeForUserControls(Set<AndroidLayoutControl> androidLayoutControls,
+                                                                    Set<AbstractWidgetNode> javaWidgets) {
         Set<AbstractWidgetNode> newWidgetSet = new HashSet<>();
         for (AndroidLayoutControl usercontrol : androidLayoutControls) {
             if (usercontrol instanceof EditTextControl) {
-                newWidgetSet.add(createEditTextForUserControl((EditTextControl)usercontrol));
-            } else {
-                if (usercontrol.getClickListener() != null)
-                    newWidgetSet.add(createClickWidgetForUserControl((GenericLayoutControl)usercontrol, ClickWidgetNode.EventType.Click));
-                else {
-                    for (ClickWidgetNode clickWidgetNode : clickWidgetNodeList) {
-                        if (clickWidgetNode.getResourceId() == usercontrol.getID()) {
-                            newWidgetSet.add(createClickWidgetForUserControl((GenericLayoutControl) usercontrol,
-                                    clickWidgetNode.getInputType()));
+                int resId = usercontrol.getID();
+                AbstractWidgetNode newEditText = null;
+                if (resId!=-1) {
+                    for (AbstractWidgetNode javaWidget : javaWidgets) {
+                        if (javaWidget.getResourceId() == resId) {
+                            newEditText = createEditTextForUserControl((EditTextControl)usercontrol, (EditWidgetNode) javaWidget);
                         }
                     }
+                }
+
+                if (newEditText==null)
+                    newEditText = createEditTextForUserControl((EditTextControl)usercontrol);
+
+                newWidgetSet.add(newEditText);
+
+            } else {
+                int resId = usercontrol.getID();
+                AbstractWidgetNode newClickWidget = null;
+
+                if (resId!=-1) {
+                    for (AbstractWidgetNode javaWidget : javaWidgets) {
+                        if (javaWidget.getResourceId() == resId) {
+                            newClickWidget = createClickWidgetForUserControl((GenericLayoutControl) usercontrol, javaWidget);
+                        }
+                    }
+                }
+
+                // if we do not have a click listener, the new click widget would be null
+                // then we check if we can solely use the XML widget to recreate this widget node
+                if (newClickWidget == null)
+                    newClickWidget = createClickWidgetForUserControl((GenericLayoutControl) usercontrol);
+
+                if (newClickWidget != null) {
+                    if (newClickWidget instanceof ClickWidgetNode)
+                        newWidgetSet.add(newClickWidget);
+                    else if (newClickWidget instanceof EditWidgetNode)
+                        newWidgetSet.add(newClickWidget);
                 }
             }
         }
@@ -442,7 +509,46 @@ public class SetupApplication {
         String hint = checkStringResource(usercontrol.getHint());
 
         if (resId!=-1) {
-            String resString = resources.findResource(resId).getResourceName();
+            String resString = resourceValueProvider.getResourceIdString(resId);
+            return new EditWidgetNode(resId,resString,text,contentDescription,hint,inputType);
+        } else {
+            return new EditWidgetNode(resId, text, contentDescription, hint, inputType);
+        }
+    }
+
+    /**
+     * Creates edit text widget out of given user control, and Java-implemented EditText
+     * @param usercontrol The user control
+     * @return The edit text widget created
+     */
+    private EditWidgetNode createEditTextForUserControl(EditTextControl usercontrol, EditWidgetNode javaEditText) {
+        int resId = usercontrol.getID();
+        String text = null;
+        String contentDescription = null;
+        String hint = null;
+        int inputType=-1;
+        if (javaEditText.getInputType()!=-1)
+            inputType = javaEditText.getInputType();
+        else if (usercontrol.getInputType()!=-1)
+            inputType = usercontrol.getInputType();
+
+        if (javaEditText.getText() != null)
+            text = checkStringResource(javaEditText.getText());
+        else if (usercontrol.getText() != null)
+            text = checkStringResource(usercontrol.getText());
+
+        if (javaEditText.getContentDescription() != null)
+            contentDescription = checkStringResource(javaEditText.getContentDescription());
+        else if (usercontrol.getContentDescription() != null)
+            contentDescription = checkStringResource(usercontrol.getContentDescription());
+
+        if (javaEditText.getHint() != null)
+            hint = checkStringResource(javaEditText.getHint());
+        else if (usercontrol.getHint() != null)
+            hint = checkStringResource(usercontrol.getHint());
+
+        if (resId!=-1) {
+            String resString = resourceValueProvider.getResourceIdString(resId);
             return new EditWidgetNode(resId,resString,text,contentDescription,hint,inputType);
         } else {
             return new EditWidgetNode(resId, text, contentDescription, hint, inputType);
@@ -454,15 +560,84 @@ public class SetupApplication {
      * @param usercontrol The user control
      * @return The click widget created
      */
-    private ClickWidgetNode createClickWidgetForUserControl(GenericLayoutControl usercontrol, ClickWidgetNode.EventType eventType) {
+    private ClickWidgetNode createClickWidgetForUserControl(GenericLayoutControl usercontrol) {
         int resId = usercontrol.getID();
         String text = checkStringResource(usercontrol.getText());
+        ClickWidgetNode.EventType eventType;
+        String clickListener = usercontrol.getClickListener();
+
+        if (clickListener!=null) {
+            eventType = ClickWidgetNode.EventType.Click;
+            if (resId!=-1) {
+                String resString = resources.findResource(resId).getResourceName();
+                return new ClickWidgetNode(resId, resString, text, eventType, clickListener);
+            } else {
+                return new ClickWidgetNode(resId, text, eventType, clickListener);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Creates click widget out of given user control
+     * @param usercontrol The user control
+     * @return The click widget created
+     */
+    private AbstractWidgetNode createClickWidgetForUserControl(GenericLayoutControl usercontrol,
+                                                            AbstractWidgetNode javaWidget) {
+        int resId = usercontrol.getID();
+        String text = null;
+        ClickWidgetNode.EventType eventType;
+        String clickListener;
+
+        // We have a discrepancy between Java and XML widgets, we will use Java widgets' type - EditText instead
+        if (javaWidget instanceof EditWidgetNode) {
+            EditWidgetNode javaEditText = (EditWidgetNode) javaWidget;
+            String contentDescription = null;
+            String hint = null;
+            int inputType=-1;
+            if (javaEditText.getInputType()!=-1)
+                inputType = javaEditText.getInputType();
+
+            if (javaEditText.getText() != null)
+                text = checkStringResource(javaEditText.getText());
+            else if (usercontrol.getText() != null)
+                text = checkStringResource(usercontrol.getText());
+
+            if (javaEditText.getContentDescription() != null)
+                contentDescription = checkStringResource(javaEditText.getContentDescription());
+
+            if (javaEditText.getHint() != null)
+                hint = checkStringResource(javaEditText.getHint());
+
+            if (resId!=-1) {
+                String resString = resourceValueProvider.getResourceIdString(resId);
+                return new EditWidgetNode(resId,resString,text,contentDescription,hint,inputType);
+            } else {
+                return new EditWidgetNode(resId, text, contentDescription, hint, inputType);
+            }
+        }
+
+        if (javaWidget.getText()!=null)
+            text = checkStringResource(javaWidget.getText());
+        else
+            text = checkStringResource(usercontrol.getText());
+
+        if (((ClickWidgetNode)javaWidget).getInputType()!= ClickWidgetNode.EventType.None) {
+            eventType = ((ClickWidgetNode) javaWidget).getInputType();
+            clickListener = ((ClickWidgetNode) javaWidget).getClickListener();
+        }
+        else if (usercontrol.getClickListener()!=null) {
+            eventType = ClickWidgetNode.EventType.Click;
+            clickListener = usercontrol.getClickListener();
+        } else
+            return null;
 
         if (resId!=-1) {
             String resString = resources.findResource(resId).getResourceName();
-            return new ClickWidgetNode(resId, resString, text, eventType);
+            return new ClickWidgetNode(resId, resString, text, eventType, clickListener);
         } else {
-            return new ClickWidgetNode(resId, text, eventType);
+            return new ClickWidgetNode(resId, text, eventType, clickListener);
         }
     }
 
@@ -476,7 +651,7 @@ public class SetupApplication {
         if (text != null) {
             if (text.matches("-?\\d+")) {
                 int resId = Integer.parseInt(text);
-                String newText = stringResource.get(resId);
+                String newText = resourceValueProvider.getStringById(resId);
                 if (newText != null)
                     return newText;
                 else
@@ -500,22 +675,19 @@ public class SetupApplication {
                                           Set<SootClass> entryPointClasses) throws IOException {
         // Collect the callback interfaces implemented in the app's source code
         AbstractJimpleAnalyzer jimpleAnalyzer = new FastJimpleAnalyzer(entryPointClasses,
-                manifest.getAllActivityClasses(), layoutFileParser, classesForFurtherAnalysis);
+                manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider);
         jimpleAnalyzer.analyzeJimpleClasses();
 
         // Get the layout class maps
-        layoutClasses = jimpleAnalyzer.getLayoutClasses();
+        this.layoutClasses = jimpleAnalyzer.getLayoutClasses();
+        this.baseactivityMapping = jimpleAnalyzer.getBaseActivityMapping();
+
 
         // Get the nodes set collected from Jimple files
         this.editWidgetNodeList = jimpleAnalyzer.getEditTextWidgetList();
         this.clickWidgetNodeList = jimpleAnalyzer.getClickWidgetNodeList();
         this.ownershipEdgesClasses = jimpleAnalyzer.getOwnershipEdges();
         this.potentialLoginMap = jimpleAnalyzer.getPotentialLoginMap();
-
-        Map<SootClass, SootClass> classMapForActivityHierarchy = jimpleAnalyzer.getClassMapForActivityHierarchy();
-        for (SootClass sc : classMapForActivityHierarchy.keySet()) {
-            activityHierarchy.addActivityToSubactivities(classMapForActivityHierarchy.get(sc), classesForFurtherAnalysis.get(sc));
-        }
 
         // Collect the results
         this.callbackMethods.putAll(jimpleAnalyzer.getCallbackMethods());
@@ -797,7 +969,7 @@ public class SetupApplication {
         // filter out callbacks even if the respective component is only
         // analyzed later.
         AbstractJimpleAnalyzer callbackAnalyzer = new DefaultJimpleAnalyzer(entryPointClasses,
-                maxCallbacksPerComponent, manifest.getAllActivityClasses(), layoutFileParser, classesForFurtherAnalysis);
+                maxCallbacksPerComponent, manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider);
 
         callbackAnalyzer.addCallbackFilter(new AlienHostComponentFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new ApplicationCallbackFilter(entrypoints));

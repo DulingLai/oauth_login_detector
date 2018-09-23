@@ -253,10 +253,11 @@ class Intent {
 	private String component;
 	private String componentPackage;
 	private String componentClass;
+	private String sourceClass;
 
 	private String action;
-	private Set<String> categories = new HashSet<String>();
-	private Map<String, String> extras = new HashMap<String, String>();
+	private Set<String> categories = new HashSet<>();
+	private Map<String, String> extras = new HashMap<>();
 	private String dataScheme;
 	private String dataHost;
 	private int dataPort = -1;
@@ -789,4 +790,12 @@ class Intent {
 	public String getType() {
 		return dataType;
 	}
+
+    public String getSourceClass() {
+        return sourceClass;
+    }
+
+    public void setSourceClass(String sourceClass) {
+        this.sourceClass = sourceClass;
+    }
 }

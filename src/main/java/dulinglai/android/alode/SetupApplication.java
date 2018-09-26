@@ -29,7 +29,6 @@ import dulinglai.android.alode.utils.androidUtils.ClassUtils;
 import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import heros.solver.Pair;
 import org.pmw.tinylog.Logger;
-import org.xmlpull.v1.XmlPullParserException;
 import soot.*;
 import soot.util.HashMultiMap;
 import soot.util.MultiMap;
@@ -114,12 +113,8 @@ public class SetupApplication {
         this.iccModel = config.getIccModelPath();
     }
 
-    void runAnalysis(){
-        // Parse Resources - collect resource ids
-        Logger.info("[{}] Parsing ARSC files for resources mapping ...", RESOURCE_PARSER);
-        long beforeARSC = System.nanoTime();
+    void runAnalysis() {
         parseResources();
-        Logger.info("[{}] DONE: Resource parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", RESOURCE_PARSER);
 
         /*
          Step 1. Collect component nodes
@@ -127,7 +122,7 @@ public class SetupApplication {
         Logger.info("[{}] Collecting activity nodes ...", RESOURCE_PARSER);
         try {
             collectComponentNodes(apkPath);
-        } catch (IOException|XmlPullParserException e) {
+        } catch (IOException e) {
             Logger.error("[ERROR] Failed to parse the manifest!");
         }
 
@@ -274,6 +269,10 @@ public class SetupApplication {
      * Parse the string resources ("en" only) and other resource ids of the resource packages
      */
     private void parseResources() {
+        // Parse Resources - collect resource ids
+        Logger.info("[{}] Parsing ARSC files for resources mapping ...", RESOURCE_PARSER);
+        long beforeARSC = System.nanoTime();
+
         Map<Integer, String> stringResource = new HashMap<>();
         Map<Integer, String> resourceId = new HashMap<>();
         Map<String, Integer> layoutResource = new HashMap<>();
@@ -324,8 +323,9 @@ public class SetupApplication {
                 }
             }
         }
-
+        // Setup a resource value provider
         resourceValueProvider = new ResourceValueProvider(stringResource, resourceId, layoutResource);
+        Logger.info("[{}] DONE: Resource parsing took " + (System.nanoTime() - beforeARSC) / 1E9 + " seconds.", RESOURCE_PARSER);
     }
 
     /**

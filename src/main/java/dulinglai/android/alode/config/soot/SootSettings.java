@@ -11,10 +11,8 @@ import soot.options.Options;
 import java.util.Collections;
 
 public class SootSettings {
-
     private static final String TAG = "SOOT";
 
-    // TODO: insert config params that can be set on runtime
     private SootHelper sootHelper = new SootHelper();
     private GlobalConfigs configs;
 
@@ -65,8 +63,9 @@ public class SootSettings {
         // Configure the callgraph algorithm
         if (sootHelper != null)
             sootHelper.setSootCallgraphAlgorithm(configs.getCallgraphAlgorithm());
-            // Add basic classes
-            sootHelper.loadSootClasses();
+
+        // Add basic classes
+        sootHelper.loadSootClasses();
 
         Logger.info("[{}] Loading dex files...",TAG);
         Scene.v().loadNecessaryClasses();

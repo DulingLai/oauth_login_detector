@@ -564,6 +564,34 @@ public class ProcessManifest {
     }
 
     /**
+     * Gets all classes the contain entry points in this applications
+     *
+     * @return All classes the contain entry points in this applications
+     */
+    public Set<String> getEntryPointClasses() {
+        // If the application is not enabled, there are no entry points
+        if (!isApplicationEnabled())
+            return Collections.emptySet();
+
+        // Collect the components
+        Set<String> entryPoints = new HashSet<String>();
+        for (AXmlNode node : this.activityNodes)
+            checkAndAddComponent(entryPoints, node);
+        for (AXmlNode node : this.providerNodes)
+            checkAndAddComponent(entryPoints, node);
+        for (AXmlNode node : this.serviceNodes)
+            checkAndAddComponent(entryPoints, node);
+        for (AXmlNode node : this.receiverNodes)
+            checkAndAddComponent(entryPoints, node);
+
+        String appName = getApplicationName();
+        if (appName != null && !appName.isEmpty())
+            entryPoints.add(appName);
+
+        return entryPoints;
+    }
+
+    /**
      * Closes this apk file and all resources associated with it
      */
     public void close() {

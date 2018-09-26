@@ -9,6 +9,7 @@ import dulinglai.android.alode.resources.resources.LayoutFileParser;
 import dulinglai.android.alode.sootData.values.ResourceValueProvider;
 import dulinglai.android.alode.utils.androidUtils.ClassUtils;
 import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
+import heros.solver.Pair;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.InvokeExpr;
@@ -40,25 +41,28 @@ public class DefaultJimpleAnalyzer extends AbstractJimpleAnalyzer implements IMe
 
     public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent,
                                  Set<String> activityList, LayoutFileParser layoutFileParser,
-                                 ResourceValueProvider resourceValueProvider) throws IOException {
+                                 ResourceValueProvider resourceValueProvider,
+                                 MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
         super(entryPointClasses, maxCallbacksPerComponent, activityList, layoutFileParser,
-                resourceValueProvider);
+                resourceValueProvider, iccUnitsForWidgetAnalysis);
     }
 
     public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                  String callbackFile, int maxCallbacksPerComponent,
                                  Set<String> activityList, LayoutFileParser layoutFileParser,
-                                 ResourceValueProvider resourceValueProvider) throws IOException {
+                                 ResourceValueProvider resourceValueProvider,
+                                 MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
         super(entryPointClasses, callbackFile, maxCallbacksPerComponent, activityList,
-                layoutFileParser, resourceValueProvider);
+                layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
     }
 
     public DefaultJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                  Set<String> androidCallbacks, int maxCallbacksPerComponent,
                                  Set<String> activityList, LayoutFileParser layoutFileParser,
-                                 ResourceValueProvider resourceValueProvider) {
+                                 ResourceValueProvider resourceValueProvider,
+                                 MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) {
         super(entryPointClasses, androidCallbacks, maxCallbacksPerComponent, activityList,
-                layoutFileParser, resourceValueProvider);
+                layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
     }
 
     /**

@@ -12,6 +12,8 @@ import heros.solver.Pair;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.*;
+import soot.jimple.toolkits.callgraph.CallGraph;
+import soot.jimple.toolkits.callgraph.Edge;
 import soot.toolkits.graph.BriefUnitGraph;
 import soot.toolkits.graph.UnitGraph;
 import soot.toolkits.scalar.SimpleLocalDefs;
@@ -19,11 +21,10 @@ import soot.toolkits.scalar.SimpleLocalUses;
 import soot.toolkits.scalar.UnitValueBoxPair;
 import soot.util.Chain;
 import soot.util.HashMultiMap;
+import soot.util.MultiMap;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * A widget analyzer that creates widgets by analyzing the jimple file
@@ -33,9 +34,10 @@ public class FastJimpleAnalyzer extends AbstractJimpleAnalyzer {
     private static final String ANALYZER = "FastJimpleAnalyzer";
 
     public FastJimpleAnalyzer(Set<SootClass> entryPointClasses, Set<String> activityList,
-                              LayoutFileParser layoutFileParser, ResourceValueProvider resourceValueProvider)
+                              LayoutFileParser layoutFileParser, ResourceValueProvider resourceValueProvider,
+                              MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis)
             throws IOException {
-        super(entryPointClasses, 0, activityList, layoutFileParser, resourceValueProvider);
+        super(entryPointClasses, 0, activityList, layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
         this.editTextWidgetList = new ArrayList<>();
         this.clickWidgetNodeList = new ArrayList<>();
         this.ownershipEdges = new HashMultiMap<>();
@@ -55,7 +57,7 @@ public class FastJimpleAnalyzer extends AbstractJimpleAnalyzer {
         // Find the widgets and mapping
         findWidgetsMappings();
 
-        // Assign callbacks to widgets
+        // Find all callbacks
         for (SootClass sc : Scene.v().getApplicationClasses()) {
             if (!sc.isConcrete())
                 continue;
@@ -69,6 +71,45 @@ public class FastJimpleAnalyzer extends AbstractJimpleAnalyzer {
             }
             // Check for method overrides
             analyzeMethodOverrideCallbacks(sc);
+        }
+
+        // Find all UI callbacks and assign them to widgets
+        for (SootClass callback : callbackMethods.keySet()){
+            for (CallbackDefinition callbackDefinition : callbackMethods.get(callback)){
+                if (callbackDefinition.getCallbackType() == CallbackDefinition.CallbackType.Widget){
+                    uicallbacks.put(callback, callbackDefinition);
+                    String clickListener = callbackDefinition.getTargetMethod().getDeclaringClass().getName();
+                    Set<ClickWidgetNode> widgetsWithListener = analyzerUtils.findWidgetsWithClickListener(clickListener, clickWidgetNodeList);
+                    if (widgetsWithListener!=null && !widgetsWithListener.isEmpty())
+                        Logger.debug("Here");
+                }
+            }
+        }
+
+        // Map clicklisteners to widgets
+        MultiMap<String, ClickWidgetNode> listenerWidgetMap = new HashMultiMap<>();
+        for (ClickWidgetNode clickWidgetNode : clickWidgetNodeList) {
+            listenerWidgetMap.put(clickWidgetNode.getClickListener(), clickWidgetNode);
+        }
+
+        // Resolving the ICC methods to callback methods to click listeners
+        CallGraph cg = Scene.v().getCallGraph();
+        for (SootClass sc : Scene.v().getApplicationClasses()) {
+            if (iccUnitsForWidgetAnalysis.containsKey(sc)) {
+                for (Pair<Unit, SootMethod> iccPair : iccUnitsForWidgetAnalysis.get(sc)) {
+                    Unit iccUnit = iccPair.getO1();
+                    SootMethod iccMethod = iccPair.getO2();
+                    for (SootMethod sm : sc.getMethods()) {
+                        if (sm.equals(iccMethod)) {
+                            if (AndroidSootClassConstants.WIDGET_CALLBACK_METHODS.contains(sm.getName()))
+                                Logger.debug("here");
+                            Iterator<Edge> callerCg = cg.edgesInto(sm);
+                            Collection<Unit> caller = icfg.getCallersOf(sm);
+                            Logger.debug("ICFG caller: {}; CG caller: {}", caller.toString(), callerCg.toString());
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -93,7 +134,7 @@ public class FastJimpleAnalyzer extends AbstractJimpleAnalyzer {
      */
     private void findWidgetsMappingsOnSootClass(SootClass sc) {
         // TODO remove debug log
-        if (sc.getName().equalsIgnoreCase("com.mcdonalds.account.activity.ForgotPasswordActivity"))
+        if (sc.getName().equalsIgnoreCase("com.pizzapizza.activity.OrderHistoryActivity"))
             Logger.debug("Here");
 
         // Check for Facebook Login Button
@@ -411,8 +452,7 @@ public class FastJimpleAnalyzer extends AbstractJimpleAnalyzer {
                                         Set<String> stringConst = Scene.v().getPointsToAnalysis().reachingObjects((Local) arg)
                                                 .possibleStringConstants();
                                         if (stringConst != null && !stringConst.isEmpty()) {
-                                            Value argValue = Jimple.v().newLocal(stringConst.iterator().next(),
-                                                    RefType.v("java.lang.String"));
+                                            StringConstant argValue = StringConstant.v(stringConst.iterator().next());
                                             inv.setArg(i, argValue);
                                             invokeExprList.add(inv);
                                         } else if (arg instanceof Local) {

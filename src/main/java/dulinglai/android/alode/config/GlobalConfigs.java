@@ -29,7 +29,7 @@ public class GlobalConfigs {
     }
 
     // analysis related configs
-    private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.AutomaticSelection;
+    private CallgraphAlgorithm callgraphAlgorithm = CallgraphAlgorithm.CHA;
     private int maxCallbacksPerComponent = 100;
     private long maxTimeout = 0;
     private CallbackAnalyzer callbackAnalyzer = CallbackAnalyzer.Fast;

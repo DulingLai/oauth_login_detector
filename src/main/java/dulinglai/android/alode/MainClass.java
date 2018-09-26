@@ -17,7 +17,7 @@ public class MainClass {
     private static final String ICC_MODEL_CONFIG = "m";
 
     // Analysis Config
-    private static final String CG_ALGO = "cg";
+    private static final String CG_ALGO = "cha";
     private static final String MAX_CALLBACK = "cb";
     private static final String MAX_TIMEOUT = "t";
 

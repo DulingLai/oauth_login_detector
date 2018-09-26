@@ -14,6 +14,7 @@ import dulinglai.android.alode.sootData.values.SimpleConstantValueProvider;
 import dulinglai.android.alode.utils.androidUtils.SystemClassHandler;
 import dulinglai.android.alode.utils.sootUtils.ResourceUtils;
 import dulinglai.android.alode.utils.sootUtils.SootMethodRepresentationParser;
+import heros.solver.Pair;
 import org.pmw.tinylog.Logger;
 import soot.*;
 import soot.jimple.*;
@@ -55,6 +56,7 @@ public abstract class AbstractJimpleAnalyzer {
     protected final int maxCallbacksPerComponent;
 
     protected final MultiMap<SootClass, CallbackDefinition> callbackMethods = new HashMultiMap<>();
+    protected MultiMap<SootClass, CallbackDefinition> uicallbacks = new HashMultiMap<>();
     protected final Set<SootClass> dynamicManifestComponents = new HashSet<>();
     protected final MultiMap<SootClass, SootClass> fragmentClasses = new HashMultiMap<>();
     protected final Map<SootClass, Integer> fragmentIDs = new HashMap<>();
@@ -65,6 +67,7 @@ public abstract class AbstractJimpleAnalyzer {
     protected IValueProvider valueProvider = new SimpleConstantValueProvider();
 
     protected Set<String> activityList;
+    protected MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis;
 
     LayoutFileParser layoutFileParser;
     final ResourceValueProvider resourceValueProvider;
@@ -84,30 +87,35 @@ public abstract class AbstractJimpleAnalyzer {
     protected List<ClickWidgetNode> clickWidgetNodeList;
     protected MultiMap<SootClass, AbstractWidgetNode> ownershipEdges;
 
-    public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent, Set<String> activityList
-            , LayoutFileParser layoutFileParser, ResourceValueProvider resourceValueProvider) throws IOException {
+    public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses, int maxCallbacksPerComponent,
+                                  Set<String> activityList, LayoutFileParser layoutFileParser,
+                                  ResourceValueProvider resourceValueProvider,
+                                  MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
         this(entryPointClasses, "AndroidCallbacks.txt", maxCallbacksPerComponent, activityList,
-                layoutFileParser, resourceValueProvider);
+                layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
     }
 
     public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                   String callbackFile, int maxCallbacksPerComponent,
                                   Set<String> activityList, LayoutFileParser layoutFileParser,
-                                  ResourceValueProvider resourceValueProvider) throws IOException {
+                                  ResourceValueProvider resourceValueProvider,
+                                  MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
         this(entryPointClasses, loadAndroidCallbacks(callbackFile), maxCallbacksPerComponent, activityList,
-                layoutFileParser, resourceValueProvider);
+                layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
     }
 
     public AbstractJimpleAnalyzer(Set<SootClass> entryPointClasses,
                                   Set<String> androidCallbacks, int maxCallbacksPerComponent,
                                   Set<String> activityList, LayoutFileParser layoutFileParser,
-                                  ResourceValueProvider resourceValueProvider) {
+                                  ResourceValueProvider resourceValueProvider,
+                                  MultiMap<SootClass, Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) {
         this.entryPointClasses = entryPointClasses;
         this.androidCallbacks = androidCallbacks;
         this.maxCallbacksPerComponent = maxCallbacksPerComponent;
         this.activityList = activityList;
         this.layoutFileParser = layoutFileParser;
         this.resourceValueProvider = resourceValueProvider;
+        this.iccUnitsForWidgetAnalysis = iccUnitsForWidgetAnalysis;
         this.icfg = new JimpleBasedInterproceduralCFG();
     }
 
@@ -696,27 +704,28 @@ public abstract class AbstractJimpleAnalyzer {
             switch (sootMethod.getName()) {
                 case "setClickable":
                 case "setOnClickListener":
+                case "setOnItemClickListener":
                     eventType = ClickWidgetNode.EventType.Click;
-                    clickListener = inv.getArg(0).toString();
+                    clickListener = inv.getArg(0).toString().replace("\"","");
                     break;
                 case "setContextClickable":
                 case "setOnContextClickListener":
                 case "setOnCreateContextMenuListener":
                     eventType = ClickWidgetNode.EventType.ContextClick;
-                    clickListener = inv.getArg(0).toString();
+                    clickListener = inv.getArg(0).toString().replace("\"","");
                     break;
                 case "setLongClickable":
                 case "setOnLongClickListener":
                     eventType = ClickWidgetNode.EventType.LongClick;
-                    clickListener = inv.getArg(0).toString();
+                    clickListener = inv.getArg(0).toString().replace("\"","");
                     break;
                 case "setOnTouchListener":
                     eventType = ClickWidgetNode.EventType.Touch;
-                    clickListener = inv.getArg(0).toString();
+                    clickListener = inv.getArg(0).toString().replace("\"","");
                     break;
                 case "setOnKeyListener":
                     eventType = ClickWidgetNode.EventType.Key;
-                    clickListener = inv.getArg(0).toString();
+                    clickListener = inv.getArg(0).toString().replace("\"","");
                     break;
             }
         }
@@ -929,6 +938,9 @@ public abstract class AbstractJimpleAnalyzer {
     }
 
     protected void analyzeMethodOverrideCallbacks(SootClass sootClass) {
+        if (sootClass.getName().equalsIgnoreCase("com.pizzapizza.activity.OrderConfirmationActivity$1"))
+            Logger.debug("here");
+
         if (!sootClass.isConcrete())
             return;
         if (sootClass.isInterface())
@@ -1056,8 +1068,10 @@ public abstract class AbstractJimpleAnalyzer {
                     }
                     break;
                 } else {
-                    tmpBaseActivityMapping.put(sc, curClass);
-                    tmpBaseActivitySet.add(curClass);
+                    if (!curClass.equals(sc)) {
+                        tmpBaseActivityMapping.put(sc, curClass);
+                        tmpBaseActivitySet.add(curClass);
+                    }
                     curClass = superClass;
                 }
             }

@@ -23,6 +23,13 @@ public class AndroidSootClassConstants {
 
     );
 
+    public static final Set<String> WIDGET_CALLBACK_METHODS = new HashSet<>(Arrays.asList(
+       "onClick",
+       "onItemClick",
+       "onContextClick",
+       "onKey"
+    ));
+
     public static final Map<String, String> WIDGET_MAP = ImmutableMap.<String, String>builder()
             .put("EditText","android.widget.EditText")
             .put("PointerIcon","android.view.PointerIcon")

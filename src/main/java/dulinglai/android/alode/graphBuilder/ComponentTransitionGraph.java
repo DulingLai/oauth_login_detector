@@ -194,6 +194,49 @@ public class ComponentTransitionGraph {
     }
 
     /**
+     * Sets the widget assigned to the transition edge with given source and target component nodes
+     * @param srcNode The source component node
+     * @param tgtNode The target component node
+     * @param widget The widget to be assigned to this transition
+     */
+    public void setEdgeWidget(AbstractComponentNode srcNode, AbstractComponentNode tgtNode, AbstractWidgetNode widget) {
+        for (TransitionEdge edge : transitionEdges) {
+            if (edge.getTgtComp().equals(tgtNode))
+                if (edge.getSrcComp().equals(srcNode))
+                    edge.setWidget(widget);
+        }
+    }
+
+    /**
+     * Sets the tag assigned to the transition edge with given source and target component nodes
+     * @param srcNode The source component node
+     * @param tgtNode The target component node
+     * @param tag The tag to be assigned to this transition
+     */
+    public void setEdgeWidget(AbstractComponentNode srcNode, AbstractComponentNode tgtNode, EdgeTag tag) {
+        for (TransitionEdge edge : transitionEdges) {
+            if (edge.getTgtComp().equals(tgtNode))
+                if (edge.getSrcComp().equals(srcNode))
+                    edge.setEdgeTag(tag);
+        }
+    }
+
+    /**
+     * Gets the tag assigned to the transition edge with given source and target component nodes
+     * @param srcNode The source component node
+     * @param tgtNode The target component node
+     * @return  The tag to be assigned to this transition
+     */
+    public EdgeTag setEdgeWidget(AbstractComponentNode srcNode, AbstractComponentNode tgtNode) {
+        for (TransitionEdge edge : transitionEdges) {
+            if (edge.getTgtComp().equals(tgtNode))
+                if (edge.getSrcComp().equals(srcNode))
+                    return edge.getEdgeTag();
+        }
+        return null;
+    }
+
+    /**
      * Gets the successor of the given component
      * @param componentNode The given component
      * @return The successor of the given component

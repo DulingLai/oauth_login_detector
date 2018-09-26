@@ -79,7 +79,6 @@ public class SetupApplication {
     // Widget Nodes
     private List<EditWidgetNode> editWidgetNodeList;
     private List<ClickWidgetNode> clickWidgetNodeList;
-    private MultiMap<SootClass, CallbackDefinition> uicallbacks = new HashMultiMap<>();
 
     // Edges
     private MultiMap<SootClass, AbstractWidgetNode> ownershipEdgesClasses = new HashMultiMap<>();
@@ -94,7 +93,6 @@ public class SetupApplication {
     // Icc Model
     private String iccModel = null;
     private ComponentTransitionGraph componentTransitionGraph;
-
 
     SetupApplication(GlobalConfigs config) {
         // Setup analysis config
@@ -142,30 +140,37 @@ public class SetupApplication {
         Logger.info("[{}] ...End Loading the ICC Model", ICC_PARSER);
 
         /*
-        Step 3. Parse XML-based widgets
+        Step 3. Build the initial activity transition graph (no widgets attached)
+         */
+        MultiMap<SootClass,Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis = buildComponentTransitionGraph(iccLinks,
+                activityNodeList, serviceNodeList, providerNodeList, receiverNodeList);
+
+        /*
+        Step 4. Parse XML-based widgets
          */
         Logger.info("[{}] Collecting XML-based widgets ...", RESOURCE_PARSER);
         LayoutFileParser layoutFileParser = new LayoutFileParser(manifest.getPackageName(), resources);
         layoutFileParser.parseLayoutFileDirect(apkPath);
 
         /*
-        Step 4. Analyze the class files
+        Step 5. Analyze the class files
          */
         Logger.info("[{}] Analyzing the class files ...", CLASS_ANALYZER);
-        for (SootClass component : entrypoints) {
-            Set<SootClass> entryPointClasses = prepareJimpleAnalysis(component);
-            processJimpleClasses(entryPointClasses, layoutFileParser);
-        }
+        processJimpleClasses(null, layoutFileParser, iccUnitsForWidgetAnalysis);
+//        for (SootClass component : entrypoints) {
+//            Set<SootClass> entryPointClasses = prepareJimpleAnalysis(component);
+//            processJimpleClasses(entryPointClasses, layoutFileParser, iccUnitsForWidgetAnalysis);
+//        }
         Logger.info("[{}] ... End analyzing the class files ...", CLASS_ANALYZER);
 
         /*
-        Step 5. Combine the XML-based widgets with the programmatically set widgets and properties
+        Step 6. Combine the XML-based widgets with the programmatically set widgets and properties
          */
         Logger.info("[{}] Combining the data from XML and class files ...", CLASS_ANALYZER);
         combineClassAndXMLData(layoutFileParser.getUserControls());
 
         /*
-        Step 6. Detect potential login activity and login widgets
+        Step 7. Detect potential login activity and login widgets
          */
         Logger.info("[{}] Detecting potential login widgets ...", LOGIN_DETECTOR);
         LoginDetector loginDetector = new LoginDetector(potentialLoginMap, ownershipEdges, activityNodeList);
@@ -174,13 +179,9 @@ public class SetupApplication {
         potentialUsernameWidget = loginDetector.getPotentialUsernameWidget();
         potentialPasswordWidget = loginDetector.getPotentialPasswordWidget();
 
-        /*
-        Step 7. Build activity transition graph
-         */
-        buildComponentTransitionGraph(iccLinks, activityNodeList, serviceNodeList, providerNodeList, receiverNodeList);
 
         /*
-        Step 7. Build execution path
+        Step 8. Build execution path
          */
 //        MultiMap<SootClass, Set<SootClass>> loginExecutionPath = buildExecutionPath(activityTransitionGraph,potentialLoginActivity);
 
@@ -219,14 +220,15 @@ public class SetupApplication {
      * @param iccLinks The ICC links from IC3
      * @param activityNodeList All activity nodes from manifest
      */
-    private void buildComponentTransitionGraph(List<IccLink> iccLinks, List<ActivityNode> activityNodeList,
+    private MultiMap<SootClass, Pair<Unit, SootMethod>> buildComponentTransitionGraph(List<IccLink> iccLinks, List<ActivityNode> activityNodeList,
                                                List<ServiceNode> serviceNodeList,
                                                List<ContentProviderNode> providerNodeList,
                                                List<BroadcastReceiverNode> receiverNodeList) {
         Logger.info("[{}] Building component transition graph ...", GRAPH_BUILDER);
         ClassUtils classUtils = new ClassUtils();
+        MultiMap<SootClass, Pair<Unit, SootMethod>> iccPairForJimpleAnalysis = new HashMultiMap<>();
 
-        // Setup activity hierarchy
+                // Setup activity hierarchy
         componentTransitionGraph = new ComponentTransitionGraph(activityNodeList, serviceNodeList, providerNodeList, receiverNodeList);
 
         // Resolve the activity links
@@ -236,40 +238,24 @@ public class SetupApplication {
             ClassUtils.ComponentType destType = classUtils.getComponentType(destClass);
             ClassUtils.ComponentType sourceType = classUtils.getComponentType(sourceClass);
 
-            // TODO remove debug logs
-            Logger.debug("ICC Link: {} -> {} -> {}", sourceClass, iccLink.getFromSM(), destClass);
-            Logger.debug("Type: {} -> {}", sourceType, destType);
-
             /*
             Connecting component nodes to component nodes
              */
             AbstractComponentNode srcComp = componentTransitionGraph.getCompNodeByName(sourceClass.getName());
             AbstractComponentNode tgtComp = componentTransitionGraph.getCompNodeByName(destClass.getName());
-            if (srcComp!=null && tgtComp!=null)
+            if (srcComp!=null && tgtComp!=null) {
                 componentTransitionGraph.addTransitionEdge(srcComp, tgtComp);
+                Unit iccUnit = iccLink.getFromU();
+                SootMethod iccMethod = iccLink.getFromSM();
+                iccPairForJimpleAnalysis.put(sourceClass, new Pair<>(iccUnit, iccMethod));
+                Logger.debug("{} -> {}", sourceClass, destClass);
+                Logger.debug("Unit: {} -> Method: {}", iccUnit, iccMethod);
+            }
             else
                 Logger.warn("[WARN] Failed to find component {} -> {}", sourceClass.getName(), destClass.getName());
-
-
-
-
-            if (destType.equals(ClassUtils.ComponentType.Activity)) {
-                if (sourceType.equals(ClassUtils.ComponentType.Activity)) {
-                    ActivityNode srcActivity = componentTransitionGraph.getActivityNodeByName(sourceClass.getName());
-                    ActivityNode tgtActivity = componentTransitionGraph.getActivityNodeByName(destClass.getName());
-                    componentTransitionGraph.addTransitionEdge(srcActivity, tgtActivity);
-                } else {
-                    List<SootClass> srcActivityClasses = classUtils.getPredActivityClassOf(iccLinks, destClass);
-                    if (srcActivityClasses!=null && !srcActivityClasses.isEmpty()) {
-                        ActivityNode tgtActivity = componentTransitionGraph.getActivityNodeByName(destClass.getName());
-                        for (SootClass srcActivityClass : srcActivityClasses) {
-                            ActivityNode srcActivity = componentTransitionGraph.getActivityNodeByName(srcActivityClass.getName());
-                            componentTransitionGraph.addTransitionEdge(srcActivity, tgtActivity);
-                        }
-                    }
-                }
-            }
         }
+
+        return iccPairForJimpleAnalysis;
     }
 
     /**
@@ -346,17 +332,17 @@ public class SetupApplication {
      * Parse the apk manifest file for entry point classes and component nodes
      * @param targetApk The target apk file to parse
      * @throws IOException When the apk is not found
-     * @throws XmlPullParserException When we failed to parse the apk manifest
      */
-    private void collectComponentNodes(String targetApk) throws IOException, XmlPullParserException {
+    private void collectComponentNodes(String targetApk) throws IOException {
         this.manifest = new ProcessManifest(targetApk);
-        Set<String> entryPointString = manifest.getLaunchableActivities();
+//        Set<String> entryPointString = manifest.getLaunchableActivities();
+        Set<String> entryPointString = manifest.getEntryPointClasses();
+        this.entrypoints = new HashSet<>(entryPointString.size());
 
-        entrypoints = new HashSet<>(entryPointString.size());
         for (String className : entryPointString){
             SootClass sc = Scene.v().getSootClassUnsafe(className);
             if (sc != null)
-                entrypoints.add(sc);
+                this.entrypoints.add(sc);
         }
 
         // Gets the component nodes from manifest
@@ -371,29 +357,21 @@ public class SetupApplication {
      * @param entryPointClasses The entry activity to start analysis
      * @param layoutFileParser The layout file parser
      */
-    private void processJimpleClasses(Set<SootClass> entryPointClasses, LayoutFileParser layoutFileParser) {
+    private void processJimpleClasses(Set<SootClass> entryPointClasses, LayoutFileParser layoutFileParser,
+                                      MultiMap<SootClass,Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) {
         try {
             switch (callbackAnalyzerType) {
                 case Fast:
-                    processJimpleClassesFast(layoutFileParser, entryPointClasses);
+                    processJimpleClassesFast(layoutFileParser, entryPointClasses, iccUnitsForWidgetAnalysis);
                     break;
                 case Default:
-                    processJimpleClassesDefault(layoutFileParser, entryPointClasses);
+                    processJimpleClassesDefault(layoutFileParser, entryPointClasses, iccUnitsForWidgetAnalysis);
                     break;
                 default:
                     throw new RuntimeException("Unknown callback analyzer");
             }
         } catch (IOException ex) {
             ex.getMessage();
-        }
-
-        // Find all UI callbacks
-        for (SootClass callback : callbackMethods.keySet()){
-            for (CallbackDefinition callbackDefinition : callbackMethods.get(callback)){
-                if (callbackDefinition.getCallbackType() == CallbackDefinition.CallbackType.Widget){
-                    uicallbacks.put(callback, callbackDefinition);
-                }
-            }
         }
     }
 
@@ -672,10 +650,16 @@ public class SetupApplication {
      *             Thrown if a required configuration cannot be read
      */
     private void processJimpleClassesFast(LayoutFileParser layoutFileParser,
-                                          Set<SootClass> entryPointClasses) throws IOException {
+                                          Set<SootClass> entryPointClasses,
+                                          MultiMap<SootClass,Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
+        // Construct callgraph
+        resetCallgraph();
+        createMainMethod(null);
+        constructCallgraphInternal();
+
         // Collect the callback interfaces implemented in the app's source code
         AbstractJimpleAnalyzer jimpleAnalyzer = new FastJimpleAnalyzer(entryPointClasses,
-                manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider);
+                manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider, iccUnitsForWidgetAnalysis);
         jimpleAnalyzer.analyzeJimpleClasses();
 
         // Get the layout class maps
@@ -706,7 +690,7 @@ public class SetupApplication {
 
 
     private void createMainMethod(SootClass component){
-        entryPointCreator = createEntryPointCreator(component);
+        this.entryPointCreator = createEntryPointCreator(component);
         SootMethod dummyMainMethod = entryPointCreator.createDummyMain();
         Scene.v().setEntryPoints(Collections.singletonList(dummyMainMethod));
         if (!dummyMainMethod.getDeclaringClass().isInScene())
@@ -956,7 +940,8 @@ public class SetupApplication {
      * @throws IOException
      *             Thrown if a required configuration cannot be read
      */
-    private void processJimpleClassesDefault(LayoutFileParser layoutFileParser, Set<SootClass> entryPointClasses) throws IOException {
+    private void processJimpleClassesDefault(LayoutFileParser layoutFileParser, Set<SootClass> entryPointClasses,
+                                             MultiMap<SootClass,Pair<Unit, SootMethod>> iccUnitsForWidgetAnalysis) throws IOException {
         // cleanup the callgraph
         resetCallgraph();
 
@@ -969,7 +954,8 @@ public class SetupApplication {
         // filter out callbacks even if the respective component is only
         // analyzed later.
         AbstractJimpleAnalyzer callbackAnalyzer = new DefaultJimpleAnalyzer(entryPointClasses,
-                maxCallbacksPerComponent, manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider);
+                maxCallbacksPerComponent, manifest.getAllActivityClasses(), layoutFileParser, resourceValueProvider,
+                iccUnitsForWidgetAnalysis);
 
         callbackAnalyzer.addCallbackFilter(new AlienHostComponentFilter(entrypoints));
         callbackAnalyzer.addCallbackFilter(new ApplicationCallbackFilter(entrypoints));

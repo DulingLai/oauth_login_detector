@@ -666,16 +666,28 @@ public class SetupApplication {
         this.layoutClasses = jimpleAnalyzer.getLayoutClasses();
         this.baseactivityMapping = jimpleAnalyzer.getBaseActivityMapping();
 
+        // Collect the results
+        this.callbackMethods.putAll(jimpleAnalyzer.getCallbackMethods());
+        this.entrypoints.addAll(jimpleAnalyzer.getDynamicManifestComponents());
+
+        // Collect XML-based callback methods
+        collectXmlBasedCallbackMethods(layoutFileParser, jimpleAnalyzer);
+
+        // Reconstruct the final callgraph
+        resetCallgraph();
+        createMainMethod(null);
+        constructCallgraphInternal();
+        jimpleAnalyzer.constructIcfg();
+
+        // Collect Java widget properties
+        jimpleAnalyzer.findWidgetsMappings();
+        jimpleAnalyzer.resolveIccMethodToWidget();
 
         // Get the nodes set collected from Jimple files
         this.editWidgetNodeList = jimpleAnalyzer.getEditTextWidgetList();
         this.clickWidgetNodeList = jimpleAnalyzer.getClickWidgetNodeList();
         this.ownershipEdgesClasses = jimpleAnalyzer.getOwnershipEdges();
         this.potentialLoginMap = jimpleAnalyzer.getPotentialLoginMap();
-
-        // Collect the results
-        this.callbackMethods.putAll(jimpleAnalyzer.getCallbackMethods());
-//        this.entrypoints.addAll(jimpleAnalyzer.getDynamicManifestComponents());
     }
 
     /**
@@ -994,6 +1006,8 @@ public class SetupApplication {
                         break;
                 }
 
+                createMainMethod(null);
+
                 // Since the gerenation of the main method can take some time,
                 // we check again whether we need to stop.
                 if (callbackAnalyzer instanceof IMemoryBoundedSolver) {
@@ -1029,7 +1043,7 @@ public class SetupApplication {
                 if (this.callbackMethods.putAll(callbackAnalyzer.getCallbackMethods()))
                     hasChanged = true;
 
-                if (entrypoints.addAll(callbackAnalyzer.getDynamicManifestComponents()))
+                if (this.entrypoints.addAll(callbackAnalyzer.getDynamicManifestComponents()))
                     hasChanged = true;
 
                 // Collect the XML-based callback methods
@@ -1095,7 +1109,7 @@ public class SetupApplication {
         PackManager.v().getPack("wjtp").remove("wjtp.ajc");
 
         // get the layout class maps
-        layoutClasses = callbackAnalyzer.getLayoutClasses();
+        this.layoutClasses = callbackAnalyzer.getLayoutClasses();
 
         // Warn the user if we had to abort the callback analysis early
         boolean abortedEarly = false;
